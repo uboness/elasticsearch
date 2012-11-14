@@ -23,6 +23,14 @@ public class DateMathParserTests {
         assertThat(parser.parse("now+1m", 0), equalTo(TimeUnit.MINUTES.toMillis(1)));
         assertThat(parser.parse("now+11m", 0), equalTo(TimeUnit.MINUTES.toMillis(11)));
 
+        assertThat(parser.parse("now+ms", 0), equalTo(1l));
+        assertThat(parser.parse("now+1ms", 0), equalTo(1l));
+        assertThat(parser.parse("now+11ms", 0), equalTo(11l));
+
+        assertThat(parser.parse("now-ms", 1), equalTo(0l));
+        assertThat(parser.parse("now-1ms", 1), equalTo(0l));
+        assertThat(parser.parse("now-11ms", 11), equalTo(0l));
+
         assertThat(parser.parse("now+1d", 0), equalTo(TimeUnit.DAYS.toMillis(1)));
 
         assertThat(parser.parse("now+1m+1s", 0), equalTo(TimeUnit.MINUTES.toMillis(1) + TimeUnit.SECONDS.toMillis(1)));

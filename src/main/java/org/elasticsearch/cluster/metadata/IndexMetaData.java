@@ -117,6 +117,9 @@ public class IndexMetaData {
             .add(IndexMetaData.SETTING_BLOCKS_METADATA)
             .build();
 
+    private static ImmutableSet<MetaDataSettingsProcessor> settingsProcessors = ImmutableSet.<MetaDataSettingsProcessor>builder()
+            .build();
+
     public static final ClusterBlock INDEX_READ_ONLY_BLOCK = new ClusterBlock(5, "index read-only (api)", false, false, RestStatus.FORBIDDEN, ClusterBlockLevel.WRITE, ClusterBlockLevel.METADATA);
     public static final ClusterBlock INDEX_READ_BLOCK = new ClusterBlock(7, "index read (api)", false, false, RestStatus.FORBIDDEN, ClusterBlockLevel.READ);
     public static final ClusterBlock INDEX_WRITE_BLOCK = new ClusterBlock(8, "index write (api)", false, false, RestStatus.FORBIDDEN, ClusterBlockLevel.WRITE);
@@ -139,6 +142,23 @@ public class IndexMetaData {
         HashSet<String> updatedSettings = new HashSet<String>(dynamicSettings);
         updatedSettings.addAll(Arrays.asList(settings));
         dynamicSettings = ImmutableSet.copyOf(updatedSettings);
+    }
+
+    public static synchronized void addDynamicSettingsProcessor(MetaDataSettingsProcessor processor) {
+        HashSet<MetaDataSettingsProcessor> updatedProcessors = new HashSet<MetaDataSettingsProcessor>(settingsProcessors);
+        updatedProcessors.add(processor);
+        settingsProcessors = ImmutableSet.copyOf(updatedProcessors);
+    }
+
+    public static ImmutableSet<MetaDataSettingsProcessor> settingsProcessors() {
+        return settingsProcessors;
+    }
+
+    public static ImmutableSettings.Builder process(ImmutableSettings.Builder settingsBuilder) {
+        for (MetaDataSettingsProcessor processor : settingsProcessors) {
+            processor.process(settingsBuilder);
+        }
+        return settingsBuilder;
     }
 
     public static enum State {

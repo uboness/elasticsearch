@@ -17,16 +17,12 @@
  * under the License.
  */
 
-package org.elasticsearch.test.integration.search.child;
+package org.elasticsearch.test.integration.ttl;
 
-/**
- * Runs super class tests, but with bitset execution type.
- */
-public class BitsetExecutionChildQuerySearchTests extends SimpleChildQuerySearchTests {
+public class IndexDocsTTL_BWC_Tests extends IndexDocsTTLTests {
 
     @Override
-    protected String getExecutionMethod() {
-        return "bitset";
+    protected String ttlIntervalSettingsKey() {
+        return "indices.ttl.interval";
     }
-
 }

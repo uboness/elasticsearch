@@ -19,12 +19,14 @@
 
 package org.elasticsearch.common.settings;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.Version;
 import org.elasticsearch.common.Nullable;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.SizeValue;
 import org.elasticsearch.common.unit.TimeValue;
+import org.joda.time.DateTime;
 
 import java.util.Map;
 
@@ -239,6 +241,22 @@ public interface Settings {
      * @throws SettingsException
      */
     String[] getAsArray(String settingPrefix) throws SettingsException;
+
+    <E extends Enum<E>> E getAsEnum(String settingPrefix, Class<E> enumClass);
+
+    <E extends Enum<E>> E getAsEnum(String settingPrefix, Class<E> enumClass, E defaultValue);
+
+    <E extends Enum<E>> ImmutableList<E> getAsEnumList(String setting, Class<E> enumClass);
+
+    <E extends Enum<E>> ImmutableList<E> getAsEnumList(String setting, Class<E> enumClass, E... defaultValues);
+
+    DateTime getAsDateTime(String setting, String formatName);
+
+    DateTime getAsDateTime(String setting, String formatName, DateTime defaultValue);
+
+    DateTime getAsDateTime(String setting);
+
+    DateTime getAsDateTime(String setting, DateTime defaultValue);
 
     /**
      * Retruns a parsed version.

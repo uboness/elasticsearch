@@ -145,16 +145,36 @@ public class DateMathParser {
                         }
                         break;
                     case 'm':
+                        boolean ms = mathString.length() >= i + 1 && 's' == mathString.charAt(i);
+                        if (ms) {
+                            i++;
+                        }
                         if (type == 0) {
                             if (roundUp) {
-                                dateTime.minuteOfHour().roundCeiling();
+                                if (ms) {
+                                    dateTime.millisOfSecond().roundCeiling();
+                                } else {
+                                    dateTime.minuteOfHour().roundCeiling();
+                                }
                             } else {
-                                dateTime.minuteOfHour().roundFloor();
+                                if (ms) {
+                                    dateTime.millisOfSecond().roundFloor();
+                                } else {
+                                    dateTime.minuteOfHour().roundFloor();
+                                }
                             }
                         } else if (type == 1) {
-                            dateTime.addMinutes(num);
+                            if (ms) {
+                                dateTime.addMillis(num);
+                            } else {
+                                dateTime.addMinutes(num);
+                            }
                         } else if (type == 2) {
-                            dateTime.addMinutes(-num);
+                            if (ms) {
+                                dateTime.addMillis(-num);
+                            } else {
+                                dateTime.addMinutes(-num);
+                            }
                         }
                         break;
                     case 's':

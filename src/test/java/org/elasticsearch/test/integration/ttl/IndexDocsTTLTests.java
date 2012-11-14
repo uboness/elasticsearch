@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -32,7 +32,7 @@ import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilde
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.*;
 
-public class SimpleTTLTests extends AbstractNodesTests {
+public class IndexDocsTTLTests extends AbstractNodesTests {
 
     static private final long purgeInterval = 200;
     private Client client;
@@ -40,7 +40,7 @@ public class SimpleTTLTests extends AbstractNodesTests {
     @BeforeClass
     public void createNodes() throws Exception {
         Settings settings = settingsBuilder()
-                .put("indices.ttl.interval", purgeInterval)
+                .put(ttlIntervalSettingsKey(), purgeInterval)
                 .put("index.number_of_shards", 2) // 2 shards to test TTL purge with routing properly
                 .put("cluster.routing.operation.use_type", false) // make sure we control the shard computation
                 .put("cluster.routing.operation.hash.type", "djb")
@@ -49,6 +49,11 @@ public class SimpleTTLTests extends AbstractNodesTests {
         startNode("node2", settings);
         client = getClient();
     }
+
+    protected String ttlIntervalSettingsKey() {
+        return "indices.ttl.docs_purge_interval";
+    }
+
 
     @AfterClass
     public void closeNodes() {
@@ -63,6 +68,11 @@ public class SimpleTTLTests extends AbstractNodesTests {
     @Test
     public void testSimpleTTL() throws Exception {
         client.admin().indices().prepareDelete().execute().actionGet();
+
+        client.admin().indices().prepareAliases()
+                .removeAlias("old_index", "my_alias")
+                .addAlias("new_index", "my_alias")
+                .execute().actionGet();
 
         client.admin().indices().prepareCreate("test")
                 .addMapping("type1", XContentFactory.jsonBuilder()

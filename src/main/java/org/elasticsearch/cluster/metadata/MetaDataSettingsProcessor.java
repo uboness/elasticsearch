@@ -17,16 +17,15 @@
  * under the License.
  */
 
-package org.elasticsearch.test.integration.search.child;
+package org.elasticsearch.cluster.metadata;
+
+import org.elasticsearch.common.settings.ImmutableSettings;
 
 /**
- * Runs super class tests, but with bitset execution type.
+ *
  */
-public class BitsetExecutionChildQuerySearchTests extends SimpleChildQuerySearchTests {
+public interface MetaDataSettingsProcessor {
 
-    @Override
-    protected String getExecutionMethod() {
-        return "bitset";
-    }
+    void process(ImmutableSettings.Builder settingsBuilder);
 
 }
