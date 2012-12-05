@@ -19,15 +19,17 @@
 
 package org.elasticsearch.test.unit.common.settings;
 
+import com.google.common.collect.ImmutableList;
 import org.elasticsearch.common.settings.NoClassSettingsException;
 import org.elasticsearch.common.settings.Settings;
+import org.elasticsearch.common.settings.SettingsException;
 import org.elasticsearch.test.unit.common.settings.bar.BarTest;
 import org.elasticsearch.test.unit.common.settings.foo.FooTest;
 import org.testng.annotations.Test;
 
 import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilder;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.*;
 
 /**
  */
@@ -59,7 +61,51 @@ public class ImmutableSettingsTests {
         // Assert that package name in settings is getting correctly applied
         assertThat(settings.getAsClass("test.class.package", FooTest.class, "com.example.elasticsearch.test.unit.common.settings.", "Test").getName(),
                 equalTo(BarTest.class.getName()));
+    }
 
+    @Test
+    public void testGetAsEnum() {
+        Settings settings = settingsBuilder()
+                .put("wrong_gender", "wat")
+                .put("gender", Gender.MALE)
+                .build();
+
+        assertThat(settings.getAsEnum("gender", Gender.class), equalTo(Gender.MALE));
+        assertThat(settings.getAsEnum("other_gender", Gender.class), equalTo(null));
+        assertThat(settings.getAsEnum("other_gender", Gender.class, Gender.FEMALE), equalTo(Gender.FEMALE));
+
+        try {
+            settings.getAsEnum("wrong_gender", Gender.class);
+        } catch (SettingsException se) {
+            // that's ok
+        }
+    }
+
+    @Test
+    public void testGetAsEnumArray() {
+        Settings settings = settingsBuilder()
+                .put("wrong_gender", "wat")
+                .put("gender", Gender.MALE, Gender.FEMALE)
+                .build();
+
+        ImmutableList<Gender> genders = settings.getAsEnumList("gender", Gender.class);
+        assertThat(genders.size(), is(2));
+        assertThat(genders.get(0) == Gender.MALE, is(true));
+        assertThat(genders.get(1) == Gender.FEMALE, is(true));
+        assertThat(settings.getAsEnumList("other_gender", Gender.class), empty());
+        genders = settings.getAsEnumList("other_gender", Gender.class, Gender.FEMALE);
+        assertThat(genders.size(), is(1));
+        assertThat(genders.get(0), equalTo(Gender.FEMALE));
+
+        try {
+            settings.getAsEnumList("wrong_gender", Gender.class);
+        } catch (SettingsException se) {
+            // that's ok
+        }
+    }
+
+    public static enum Gender {
+        MALE, FEMALE
     }
 
 }

@@ -147,7 +147,7 @@ public class MetaDataUpdateSettingsService extends AbstractComponent implements 
                 updatedSettingsBuilder.remove(removedSetting);
             }
         }
-        final Settings openSettings = updatedSettingsBuilder.build();
+        final Settings openSettings = IndexMetaData.process(updatedSettingsBuilder).build();
 
         clusterService.submitStateUpdateTask("update-settings", new ProcessedClusterStateUpdateTask() {
             @Override

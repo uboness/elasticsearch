@@ -117,7 +117,9 @@ public class MetaDataCreateIndexService extends AbstractComponent {
                 updatedSettingsBuilder.put(entry.getKey(), entry.getValue());
             }
         }
-        request.settings(updatedSettingsBuilder.build());
+
+        Settings indexSettings = IndexMetaData.process(updatedSettingsBuilder).build();
+        request.settings(indexSettings);
 
         // we lock here, and not within the cluster service callback since we don't want to
         // block the whole cluster state handling

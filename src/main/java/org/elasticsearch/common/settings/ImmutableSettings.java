@@ -19,6 +19,7 @@
 
 package org.elasticsearch.common.settings;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import org.elasticsearch.Version;
@@ -28,6 +29,7 @@ import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.io.Streams;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.common.joda.Joda;
 import org.elasticsearch.common.property.PropertyPlaceholder;
 import org.elasticsearch.common.settings.loader.SettingsLoader;
 import org.elasticsearch.common.settings.loader.SettingsLoaderFactory;
@@ -35,6 +37,7 @@ import org.elasticsearch.common.unit.ByteSizeUnit;
 import org.elasticsearch.common.unit.ByteSizeValue;
 import org.elasticsearch.common.unit.SizeValue;
 import org.elasticsearch.common.unit.TimeValue;
+import org.joda.time.DateTime;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -276,6 +279,75 @@ public class ImmutableSettings implements Settings {
             return defaultArray;
         }
         return result.toArray(new String[result.size()]);
+    }
+
+    @Override
+    public <E extends Enum<E>> E getAsEnum(String setting, Class<E> enumClass) {
+        String value = get(setting);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Enum.valueOf(enumClass, value.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new SettingsException("Failed to parse enum setting [" + setting + "] with value [" + value + "]", e);
+        }
+    }
+
+    @Override
+    public <E extends Enum<E>> E getAsEnum(String settingPrefix, Class<E> enumClass, E defaultValue) {
+        E value = getAsEnum(settingPrefix, enumClass);
+        return value != null ? value : defaultValue;
+    }
+
+    public <E extends Enum<E>> ImmutableList<E> getAsEnumList(String setting, Class<E> enumClass) {
+        String[] values = getAsArray(setting);
+        String currentValue = null;
+        try {
+            ImmutableList.Builder<E> enums = ImmutableList.builder();
+            for (int i = 0; i < values.length; i++) {
+                currentValue = values[i];
+                enums.add(Enum.valueOf(enumClass, currentValue.toUpperCase()));
+            }
+            return enums.build();
+        } catch (IllegalArgumentException e) {
+            throw new SettingsException("Failed to parse enum setting [" + setting + "] with value [" + currentValue + "]", e);
+        }
+    }
+
+    @Override
+    public <E extends Enum<E>> ImmutableList<E> getAsEnumList(String setting, Class<E> enumClass, E... defaultValues) {
+        ImmutableList enums = getAsEnumList(setting, enumClass);
+        return !enums.isEmpty() ? enums : ImmutableList.builder().add(defaultValues).build();
+    }
+
+    @Override
+    public DateTime getAsDateTime(String setting, String formatName) {
+        String value = get(setting);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return Joda.forPattern(formatName).parser().parseDateTime(value);
+        } catch (Throwable e) {
+            throw new SettingsException("Failed to parse datetime setting [" + setting + "] with value [" + value + "]", e);
+        }
+    }
+
+    @Override
+    public DateTime getAsDateTime(String setting, String formatName, DateTime defaultValue) {
+        DateTime value = getAsDateTime(setting, formatName);
+        return value != null ? value : defaultValue;
+    }
+
+    @Override
+    public DateTime getAsDateTime(String setting) {
+        return getAsDateTime(setting, "dateTime");
+    }
+
+    @Override
+    public DateTime getAsDateTime(String setting, DateTime defaultValue) {
+        return getAsDateTime(setting, "dateTime", defaultValue);
     }
 
     @Override
@@ -540,6 +612,22 @@ public class ImmutableSettings implements Settings {
                 put(setting + "." + i, values[i]);
             }
             return this;
+        }
+
+        /**
+         * Sets the settings with the provided setting key and an enum value
+         *
+         * @param setting The setting key
+         * @param enumValue The enum value
+         * @param <T> The enum type
+         * @return The builder
+         */
+        public <T extends Enum<T>> Builder put(String setting, T enumValue) {
+            return put(setting, enumValue.name());
+        }
+
+        public <T extends Enum<T>> Builder put(String setting, T... enumValues) {
+            return put(setting, Strings.arrayToCommaDelimitedString(enumValues));
         }
 
         /**

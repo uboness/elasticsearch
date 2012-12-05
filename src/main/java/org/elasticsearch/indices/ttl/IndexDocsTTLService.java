@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -61,15 +61,17 @@ import java.util.List;
 /**
  * A node level service that delete expired docs on node primary shards.
  */
-public class IndicesTTLService extends AbstractLifecycleComponent<IndicesTTLService> {
+public class IndexDocsTTLService extends AbstractLifecycleComponent<IndexDocsTTLService> {
 
     static {
         MetaData.addDynamicSettings(
-                "indices.ttl.interval"
+                "indices.ttl.interval", // deprecated
+                "indices.ttl.docs_purge_interval"
         );
 
         IndexMetaData.addDynamicSettings(
-                "index.ttl.disable_purge"
+                "index.ttl.disable_purge", // deprecated
+                "index.ttl.disable_docs_purge"
         );
     }
 
@@ -82,20 +84,22 @@ public class IndicesTTLService extends AbstractLifecycleComponent<IndicesTTLServ
     private PurgerThread purgerThread;
 
     @Inject
-    public IndicesTTLService(Settings settings, ClusterService clusterService, IndicesService indicesService, NodeSettingsService nodeSettingsService, Client client) {
+    public IndexDocsTTLService(Settings settings, ClusterService clusterService, IndicesService indicesService, NodeSettingsService nodeSettingsService, Client client) {
         super(settings);
         this.clusterService = clusterService;
         this.indicesService = indicesService;
         this.client = client;
-        this.interval = componentSettings.getAsTime("interval", TimeValue.timeValueSeconds(60));
-        this.bulkSize = componentSettings.getAsInt("bulk_size", 10000);
+
+        // todo change after the deprecated settings are removed
+        this.interval = componentSettings.getAsTime("docs_purge_interval", componentSettings.getAsTime("interval", TimeValue.timeValueSeconds(60)));
+        this.bulkSize = componentSettings.getAsInt("docs_purge_bulk_size", componentSettings.getAsInt("bulk_size", 10000));
 
         nodeSettingsService.addListener(new ApplySettings());
     }
 
     @Override
     protected void doStart() throws ElasticSearchException {
-        this.purgerThread = new PurgerThread(EsExecutors.threadName(settings, "[ttl_expire]"));
+        this.purgerThread = new PurgerThread(EsExecutors.threadName(settings, "[docs_purge_ttl_expire]"));
         this.purgerThread.start();
     }
 
@@ -128,7 +132,7 @@ public class IndicesTTLService extends AbstractLifecycleComponent<IndicesTTLServ
                     purgeShards(shardsToPurge);
                 } catch (Throwable e) {
                     if (running) {
-                        logger.warn("failed to execute ttl purge", e);
+                        logger.warn("failed to execute docs ttl purge", e);
                     }
                 }
                 try {
@@ -152,7 +156,8 @@ public class IndicesTTLService extends AbstractLifecycleComponent<IndicesTTLServ
                 if (indexMetaData == null) {
                     continue;
                 }
-                boolean disablePurge = indexMetaData.settings().getAsBoolean("index.ttl.disable_purge", false);
+                boolean disablePurge = indexMetaData.settings().getAsBoolean("index.ttl.disable_docs_purge",
+                        indexMetaData.settings().getAsBoolean("index.ttl.disable_purge", false));
                 if (disablePurge) {
                     continue;
                 }
@@ -187,7 +192,7 @@ public class IndicesTTLService extends AbstractLifecycleComponent<IndicesTTLServ
             Query query = NumericRangeQuery.newLongRange(TTLFieldMapper.NAME, null, System.currentTimeMillis(), false, true);
             Engine.Searcher searcher = shardToPurge.searcher();
             try {
-                logger.debug("[{}][{}] purging shard", shardToPurge.routingEntry().index(), shardToPurge.routingEntry().id());
+                logger.debug("[{}][{}] purging shard docs", shardToPurge.routingEntry().index(), shardToPurge.routingEntry().id());
                 ExpiredDocsCollector expiredDocsCollector = new ExpiredDocsCollector();
                 searcher.searcher().search(query, expiredDocsCollector);
                 List<DocToPurge> docsToPurge = expiredDocsCollector.getDocsToPurge();
@@ -198,7 +203,7 @@ public class IndicesTTLService extends AbstractLifecycleComponent<IndicesTTLServ
                 }
                 processBulkIfNeeded(bulkRequest, true);
             } catch (Exception e) {
-                logger.warn("failed to purge", e);
+                logger.warn("failed to purge docs", e);
             } finally {
                 searcher.release();
             }
@@ -279,10 +284,11 @@ public class IndicesTTLService extends AbstractLifecycleComponent<IndicesTTLServ
     class ApplySettings implements NodeSettingsService.Listener {
         @Override
         public void onRefreshSettings(Settings settings) {
-            TimeValue interval = settings.getAsTime("indices.ttl.interval", IndicesTTLService.this.interval);
-            if (!interval.equals(IndicesTTLService.this.interval)) {
-                logger.info("updating indices.ttl.interval from [{}] to [{}]", IndicesTTLService.this.interval, interval);
-                IndicesTTLService.this.interval = interval;
+            TimeValue interval = settings.getAsTime("indices.ttl.docs_purge_interval",
+                    settings.getAsTime("indices.ttl.interval", IndexDocsTTLService.this.interval));
+            if (!interval.equals(IndexDocsTTLService.this.interval)) {
+                logger.info("updating indices.ttl.docs_purge_interval from [{}] to [{}]", IndexDocsTTLService.this.interval, interval);
+                IndexDocsTTLService.this.interval = interval;
             }
         }
     }
