@@ -44,10 +44,14 @@ public class DiscoveryNodeFiltersTests {
         DiscoveryNodeFilters filters = DiscoveryNodeFilters.buildFromSettings(OR, "xxx.", settings);
 
         DiscoveryNode node = new DiscoveryNode("name1", "id1", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(true));
+        DiscoveryNodeFilters.Match match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(true));
+        System.out.println(match);
 
         node = new DiscoveryNode("name2", "id2", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(false));
+        match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(false));
+        System.out.println(match);
     }
 
     @Test
@@ -58,10 +62,12 @@ public class DiscoveryNodeFiltersTests {
         DiscoveryNodeFilters filters = DiscoveryNodeFilters.buildFromSettings(OR, "xxx.", settings);
 
         DiscoveryNode node = new DiscoveryNode("name1", "id1", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(true));
+        assertThat(filters.match(node).matches(), equalTo(true));
 
         node = new DiscoveryNode("name2", "id2", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(false));
+        DiscoveryNodeFilters.Match match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(false));
+        System.out.println(match);
     }
 
     @Test
@@ -73,13 +79,19 @@ public class DiscoveryNodeFiltersTests {
         DiscoveryNodeFilters filters = DiscoveryNodeFilters.buildFromSettings(OR, "xxx.", settings);
 
         DiscoveryNode node = new DiscoveryNode("name1", "id1", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(true));
+        DiscoveryNodeFilters.Match match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(true));
+        System.out.println(match);
 
         node = new DiscoveryNode("name2", "id2", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(true));
+        match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(true));
+        System.out.println(match);
 
         node = new DiscoveryNode("name3", "id3", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(false));
+        match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(false));
+        System.out.println(match);
     }
 
     @Test
@@ -92,18 +104,26 @@ public class DiscoveryNodeFiltersTests {
 
         DiscoveryNode node = new DiscoveryNode("name1", "id1", DummyTransportAddress.INSTANCE,
                 ImmutableMap.<String, String>of("tag", "A", "group", "B"));
-        assertThat(filters.match(node), equalTo(true));
+        DiscoveryNodeFilters.Match match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(true));
+        System.out.println(match);
 
         node = new DiscoveryNode("name2", "id2", DummyTransportAddress.INSTANCE,
                 ImmutableMap.<String, String>of("tag", "A", "group", "B", "name", "X"));
-        assertThat(filters.match(node), equalTo(true));
+        match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(true));
+        System.out.println(match);
 
         node = new DiscoveryNode("name3", "id3", DummyTransportAddress.INSTANCE,
                 ImmutableMap.<String, String>of("tag", "A", "group", "F", "name", "X"));
-        assertThat(filters.match(node), equalTo(false));
+        match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(false));
+        System.out.println(match);
 
         node = new DiscoveryNode("name4", "id4", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(false));
+        match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(false));
+        System.out.println(match);
     }
 
     @Test
@@ -114,6 +134,8 @@ public class DiscoveryNodeFiltersTests {
         DiscoveryNodeFilters filters = DiscoveryNodeFilters.buildFromSettings(OR, "xxx.", settings);
 
         DiscoveryNode node = new DiscoveryNode("name1", "id1", DummyTransportAddress.INSTANCE, ImmutableMap.<String, String>of());
-        assertThat(filters.match(node), equalTo(true));
+        DiscoveryNodeFilters.Match match = filters.match(node, true);
+        assertThat(match.matches(), equalTo(true));
+        System.out.println(match);
     }
 }

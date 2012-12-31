@@ -22,6 +22,7 @@ package org.elasticsearch.action.admin.cluster.reroute;
 import org.elasticsearch.ElasticSearchParseException;
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.support.master.MasterNodeOperationRequest;
+import org.elasticsearch.cluster.routing.allocation.AllocationExplanation;
 import org.elasticsearch.cluster.routing.allocation.command.AllocationCommand;
 import org.elasticsearch.cluster.routing.allocation.command.AllocationCommands;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -36,8 +37,26 @@ import java.io.IOException;
  */
 public class ClusterRerouteRequest extends MasterNodeOperationRequest<ClusterRerouteRequest> {
 
+    public static enum Explain {
+
+        NONE(AllocationExplanation.Level.INFO),
+        BASIC(AllocationExplanation.Level.DEBUG),
+        DETAILED(AllocationExplanation.Level.TRACE);
+
+        private final AllocationExplanation.Level level;
+
+        private Explain(AllocationExplanation.Level level) {
+            this.level = level;
+        }
+
+        AllocationExplanation.Level explanationLevel() {
+            return level;
+        }
+    }
+
     AllocationCommands commands = new AllocationCommands();
     boolean dryRun;
+    private Explain explain = Explain.BASIC;
 
     public ClusterRerouteRequest() {
     }
@@ -62,6 +81,20 @@ public class ClusterRerouteRequest extends MasterNodeOperationRequest<ClusterRer
 
     public boolean dryRun() {
         return this.dryRun;
+    }
+
+    /**
+     * Sets the allocation explanation level
+     *
+     * @param explain The explanation level.
+     */
+    public ClusterRerouteRequest explain(Explain explain) {
+        this.explain = explain;
+        return this;
+    }
+
+    public Explain explain() {
+        return explain;
     }
 
     /**
@@ -105,6 +138,7 @@ public class ClusterRerouteRequest extends MasterNodeOperationRequest<ClusterRer
         super.readFrom(in);
         commands = AllocationCommands.readFrom(in);
         dryRun = in.readBoolean();
+        explain = Explain.valueOf(in.readString());
     }
 
     @Override
@@ -112,5 +146,6 @@ public class ClusterRerouteRequest extends MasterNodeOperationRequest<ClusterRer
         super.writeTo(out);
         AllocationCommands.writeTo(commands, out);
         out.writeBoolean(dryRun);
+        out.writeString(explain.name());
     }
 }

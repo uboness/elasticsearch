@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *      http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -65,7 +65,7 @@ import static org.elasticsearch.cluster.routing.ShardRoutingState.RELOCATING;
 * <ul><li><code>cluster.routing.allocation.balance.shard</code> - The <b>shard balance</b> defines the weight factor
 *               for shards allocated on a {@link RoutingNode}</li>
 *     <li><code>cluster.routing.allocation.balance.index</code> - The <b>index balance</b> defines a factor to the number
-*               of {@link ShardRouting}s per index allocated on a specific node</li>
+*               of {@link org.elasticsearch.cluster.routing.ShardRouting}s per index allocated on a specific node</li>
 *     <li><code>cluster.routing.allocation.balance.primary</code> - the <b>primary balance</b> defines a weight factor for
 *               the number of primaries of a specific index allocated on a node</li>
 *     <li><code>cluster.routing.allocation.balance.threshold</code> - A <b>threshold</b> to set the minimal optimization
@@ -569,7 +569,7 @@ public class BalancedShardsAllocator extends AbstractComponent implements Shards
 	                     * not violate the not null condition.
 	                     */
 	                    if (!node.containsShard(shard)) {
-	                        node.addShard(shard, Decision.ALWAYS);
+	                        node.addShard(shard, Decision.NOT_APPLICABLE);
 	                        float currentWeight = weight.weight(this, node, shard.index());
 	                        /*
 	                         * Remove the shard from the node again this is only a

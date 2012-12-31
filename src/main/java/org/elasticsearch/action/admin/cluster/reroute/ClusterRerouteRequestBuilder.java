@@ -52,6 +52,14 @@ public class ClusterRerouteRequestBuilder extends MasterNodeOperationRequestBuil
         return this;
     }
 
+    /**
+     * see {@link ClusterRerouteRequest#explain(ClusterRerouteRequest.Explain)}
+     */
+    public ClusterRerouteRequestBuilder setExplain(ClusterRerouteRequest.Explain explain) {
+        request.explain(explain);
+        return this;
+    }
+
     public ClusterRerouteRequestBuilder setSource(BytesReference source) throws Exception {
         request.source(source);
         return this;

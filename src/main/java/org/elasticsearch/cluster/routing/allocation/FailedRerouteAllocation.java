@@ -32,8 +32,8 @@ public class FailedRerouteAllocation extends RoutingAllocation {
 
     private final ShardRouting failedShard;
 
-    public FailedRerouteAllocation(AllocationDeciders deciders, RoutingNodes routingNodes, DiscoveryNodes nodes, ShardRouting failedShard) {
-        super(deciders, routingNodes, nodes);
+    public FailedRerouteAllocation(AllocationDeciders deciders, RoutingNodes routingNodes, DiscoveryNodes nodes, AllocationExplanation.Level explanationLevel, ShardRouting failedShard) {
+        super(deciders, routingNodes, nodes, explanationLevel);
         this.failedShard = failedShard;
     }
 

@@ -22,9 +22,14 @@ package org.elasticsearch.cluster.routing.allocation;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.elasticsearch.cluster.node.DiscoveryNode;
+import org.elasticsearch.cluster.routing.allocation.decider.Decision;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.ESLoggerFactory;
+import org.elasticsearch.common.xcontent.ToXContent;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.index.shard.ShardId;
 
 import java.io.IOException;
@@ -34,30 +39,53 @@ import java.util.Map;
 /**
  * Instances of this class keeps explanations of decisions that have been made by allocation.
  * An {@link AllocationExplanation} consists of a set of per node explanations.
- * Since {@link NodeExplanation}s are related to shards an {@link AllocationExplanation} maps
- * a shards id to a set of {@link NodeExplanation}s.  
+ * Since {@link org.elasticsearch.cluster.routing.allocation.AllocationExplanation.Explanation}s are related to shards an {@link AllocationExplanation} maps
+ * a shards id to a set of {@link org.elasticsearch.cluster.routing.allocation.AllocationExplanation.Explanation}s.
  */
-public class AllocationExplanation implements Streamable {
+public class AllocationExplanation implements Streamable, ToXContent {
 
     public static final AllocationExplanation EMPTY = new AllocationExplanation();
+
+    private static final ESLogger logger = ESLoggerFactory.getLogger(AllocationExplanation.class.getName());
+
+    public enum Level {
+
+        INFO, DEBUG, TRACE;
+
+        public boolean debugEnabled() {
+            return this != INFO;
+        }
+
+        public boolean traceEnabled() {
+            return this == TRACE;
+        }
+
+    }
 
     /**
      * Instances of this class keep messages and informations about nodes of an allocation
      */
-    public static class NodeExplanation {
-        private final DiscoveryNode node;
+    public static class Explanation {
 
-        private final String description;
+        private final DiscoveryNode node;
+        private final String action;
+        private final Decision decision;
+
+        public Explanation(String action, Decision decision) {
+            this(null, action, decision);
+        }
 
         /**
-         * Creates a new {@link NodeExplanation}
+         * Creates a new {@link org.elasticsearch.cluster.routing.allocation.AllocationExplanation.Explanation}
          *  
-         * @param node node referenced by {@link This} {@link NodeExplanation}
-         * @param description a message associated with the given node 
+         * @param node node referenced by {@link this} {@link org.elasticsearch.cluster.routing.allocation.AllocationExplanation.Explanation}
+         * @param action The allocation action
+         * @param decision A decision indicating whether the shard could be allocated on the given node
          */
-        public NodeExplanation(DiscoveryNode node, String description) {
+        public Explanation(DiscoveryNode node, String action, Decision decision) {
             this.node = node;
-            this.description = description;
+            this.action = action;
+            this.decision = decision;
         }
 
         /**
@@ -68,39 +96,77 @@ public class AllocationExplanation implements Streamable {
             return node;
         }
 
+        public String action() {
+            return action;
+        }
+
         /**
-         * Get the explanation for the node
-         * @return explanation for the node
+         * @return allocation decision for the node
          */
-        public String description() {
-            return description;
+        public Decision decision() {
+            return decision;
+        }
+
+        @Override
+        public String toString() {
+            if (node == null) {
+                return String.format("action [%s], decision: [%s]", action, decision);
+            }
+            return String.format("node [%s], action [%s], decision: [%s]", node.id(), action, decision);
         }
     }
 
-    private final Map<ShardId, List<NodeExplanation>> explanations = Maps.newHashMap();
+    private final Map<ShardId, List<Explanation>> explanations = Maps.newHashMap();
+
+    private Level level;
+
+    public AllocationExplanation() {
+        this(Level.INFO);
+    }
+
+    public AllocationExplanation(Level level) {
+        this.level = level;
+    }
 
     /**
      * Create and add a node explanation to this explanation referencing a shard  
      * @param shardId id the of the referenced shard
-     * @param nodeExplanation Explanation itself
+     * @param explanation Explanation itself
      * @return AllocationExplanation involving the explanation 
      */
-    public AllocationExplanation add(ShardId shardId, NodeExplanation nodeExplanation) {
-        List<NodeExplanation> list = explanations.get(shardId);
+    public AllocationExplanation add(ShardId shardId, Explanation explanation) {
+        List<Explanation> list = explanations.get(shardId);
         if (list == null) {
             list = Lists.newArrayList();
             explanations.put(shardId, list);
         }
-        list.add(nodeExplanation);
+        list.add(explanation);
         return this;
+    }
+
+    public Level level() {
+        return level;
     }
 
     /**
      * List of explanations involved by this AllocationExplanation
      * @return Map of shard ids and corresponding explanations  
      */
-    public Map<ShardId, List<NodeExplanation>> explanations() {
+    public Map<ShardId, List<Explanation>> explanations() {
         return this.explanations;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder("allocation explanation:");
+        for (Map.Entry<ShardId, List<Explanation>> entry : explanations.entrySet()) {
+            for (Explanation explanation : entry.getValue()) {
+                if (logger.isTraceEnabled() || (logger.isDebugEnabled() && explanation.decision == Decision.NO)) {
+                    sb.append('\n').append("shard ").append(entry.getKey()).append(", ").append(explanation);
+                }
+            }
+        }
+        return sb.toString();
     }
 
     /**
@@ -117,17 +183,18 @@ public class AllocationExplanation implements Streamable {
 
     @Override
     public void readFrom(StreamInput in) throws IOException {
+        level = Level.valueOf(in.readString());
         int size = in.readVInt();
         for (int i = 0; i < size; i++) {
             ShardId shardId = ShardId.readShardId(in);
             int size2 = in.readVInt();
-            List<NodeExplanation> ne = Lists.newArrayListWithCapacity(size2);
+            List<Explanation> ne = Lists.newArrayListWithCapacity(size2);
             for (int j = 0; j < size2; j++) {
                 DiscoveryNode node = null;
                 if (in.readBoolean()) {
                     node = DiscoveryNode.readNode(in);
                 }
-                ne.add(new NodeExplanation(node, in.readString()));
+                ne.add(new Explanation(node, in.readString(), Decision.readDecision(in)));
             }
             explanations.put(shardId, ne);
         }
@@ -135,19 +202,48 @@ public class AllocationExplanation implements Streamable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        out.writeString(level.name());
         out.writeVInt(explanations.size());
-        for (Map.Entry<ShardId, List<NodeExplanation>> entry : explanations.entrySet()) {
+        for (Map.Entry<ShardId, List<Explanation>> entry : explanations.entrySet()) {
             entry.getKey().writeTo(out);
             out.writeVInt(entry.getValue().size());
-            for (NodeExplanation nodeExplanation : entry.getValue()) {
-                if (nodeExplanation.node() == null) {
+            for (Explanation explanation : entry.getValue()) {
+                if (explanation.node() == null) {
                     out.writeBoolean(false);
                 } else {
                     out.writeBoolean(true);
-                    nodeExplanation.node().writeTo(out);
+                    explanation.node().writeTo(out);
                 }
-                out.writeString(nodeExplanation.description());
+                out.writeString(explanation.action);
+                Decision.writeDecision(explanation.decision, out);
             }
         }
+    }
+
+    @Override
+    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+        builder.startArray();
+        for (Map.Entry<ShardId, List<Explanation>> entry : explanations.entrySet()) {
+            for (Explanation explanation : entry.getValue()) {
+                builder.startObject();
+                builder.field("action", explanation.action());
+                builder.field("index", entry.getKey().getIndex());
+                builder.field("shard", entry.getKey().getId());
+                if (explanation.node != null) {
+                    builder.field("node_id", explanation.node.id());
+                    builder.field("node_name", explanation.node.name());
+                }
+                builder.field("decision");
+                if ("basic".equalsIgnoreCase(params.param("explain", "basic"))) {
+                    builder.value(explanation.decision.type().name());
+                } else { // detailed
+                    explanation.decision.toXContent(builder, params);
+                }
+
+                builder.endObject();
+            }
+        }
+        builder.endArray();
+        return builder;
     }
 }

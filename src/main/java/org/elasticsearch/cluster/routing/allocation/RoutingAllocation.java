@@ -24,6 +24,7 @@ import org.elasticsearch.cluster.node.DiscoveryNodes;
 import org.elasticsearch.cluster.routing.RoutingNodes;
 import org.elasticsearch.cluster.routing.RoutingTable;
 import org.elasticsearch.cluster.routing.allocation.decider.AllocationDeciders;
+import org.elasticsearch.cluster.routing.allocation.decider.Decision;
 import org.elasticsearch.index.shard.ShardId;
 
 import java.util.HashMap;
@@ -90,23 +91,29 @@ public class RoutingAllocation {
 
     private final DiscoveryNodes nodes;
 
-    private final AllocationExplanation explanation = new AllocationExplanation();
+    private final AllocationExplanation explanation;
 
     private Map<ShardId, String> ignoredShardToNodes = null;
 
     private boolean ignoreDisable = false;
 
+    public RoutingAllocation(AllocationDeciders deciders, RoutingNodes routingNodes, DiscoveryNodes nodes) {
+        this(deciders, routingNodes, nodes, AllocationExplanation.Level.INFO);
+    }
+
     /**
      * Creates a new {@link RoutingAllocation}
-     * 
+     *
      * @param deciders {@link AllocationDeciders} to used to make decisions for routing allocations
-     * @param routingNodes Routing nodes in the current cluster 
+     * @param routingNodes Routing nodes in the current cluster
      * @param nodes TODO: Documentation
+     * @param explanationLevel The level of allocation decision explanations.
      */
-    public RoutingAllocation(AllocationDeciders deciders, RoutingNodes routingNodes, DiscoveryNodes nodes) {
+    public RoutingAllocation(AllocationDeciders deciders, RoutingNodes routingNodes, DiscoveryNodes nodes, AllocationExplanation.Level explanationLevel) {
         this.deciders = deciders;
         this.routingNodes = routingNodes;
         this.nodes = nodes;
+        this.explanation = new AllocationExplanation(explanationLevel);
     }
 
     /**
@@ -175,4 +182,27 @@ public class RoutingAllocation {
     public boolean shouldIgnoreShardForNode(ShardId shardId, String nodeId) {
         return ignoredShardToNodes != null && nodeId.equals(ignoredShardToNodes.get(shardId));
     }
+
+    public Decision decisionTrace(Decision baseDecision, String message, Object... messageArgs) {
+        return decisionTrace(baseDecision, baseDecision.title(), message, messageArgs);
+    }
+
+    public Decision decisionTrace(Decision baseDecision, String decider, String message, Object... messageArgs) {
+        if (explanation().level().traceEnabled()) {
+            return Decision.single(baseDecision.type(), decider, message, messageArgs);
+        }
+        return baseDecision;
+    }
+
+    public Decision decisionDebug(Decision baseDecision, String message, Object... messageArgs) {
+        return decisionDebug(baseDecision, baseDecision.title(), message, messageArgs);
+    }
+
+    public Decision decisionDebug(Decision baseDecision, String decider, String message, Object... messageArgs) {
+        if (explanation().level().debugEnabled()) {
+            return Decision.single(baseDecision.type(), decider, message, messageArgs);
+        }
+        return baseDecision;
+    }
+
 }

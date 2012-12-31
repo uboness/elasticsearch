@@ -21,6 +21,7 @@ package org.elasticsearch.action.admin.cluster.reroute;
 
 import org.elasticsearch.action.ActionResponse;
 import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.routing.allocation.AllocationExplanation;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 
@@ -31,13 +32,15 @@ import java.io.IOException;
 public class ClusterRerouteResponse extends ActionResponse {
 
     private ClusterState state;
+    private AllocationExplanation explanation;
 
     ClusterRerouteResponse() {
 
     }
 
-    ClusterRerouteResponse(ClusterState state) {
+    ClusterRerouteResponse(ClusterState state, AllocationExplanation explanation) {
         this.state = state;
+        this.explanation = explanation;
     }
 
     public ClusterState state() {
@@ -48,15 +51,25 @@ public class ClusterRerouteResponse extends ActionResponse {
         return this.state;
     }
 
+    public AllocationExplanation explanation() {
+        return this.explanation;
+    }
+
+    public AllocationExplanation getExplanation() {
+        return this.explanation;
+    }
+
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         state = ClusterState.Builder.readFrom(in, null);
+        explanation = AllocationExplanation.readAllocationExplanation(in);
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         ClusterState.Builder.writeTo(state, out);
+        explanation.writeTo(out);
     }
 }

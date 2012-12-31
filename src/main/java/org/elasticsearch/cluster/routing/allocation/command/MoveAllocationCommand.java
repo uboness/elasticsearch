@@ -26,6 +26,7 @@ import org.elasticsearch.cluster.node.DiscoveryNode;
 import org.elasticsearch.cluster.routing.MutableShardRouting;
 import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.ShardRoutingState;
+import org.elasticsearch.cluster.routing.allocation.AllocationExplanation;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.cluster.routing.allocation.decider.Decision;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -160,6 +161,7 @@ public class MoveAllocationCommand implements AllocationCommand {
 
             RoutingNode toRoutingNode = allocation.routingNodes().node(toDiscoNode.id());
             Decision decision = allocation.deciders().canAllocate(shardRouting, toRoutingNode, allocation);
+            allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation(toDiscoNode, "allocate", decision));
             if (decision.type() == Decision.Type.NO) {
                 throw new ElasticSearchIllegalArgumentException("[move_allocation] can't move " + shardId + ", from " + fromDiscoNode + ", to " + toDiscoNode + ", since its not allowed, reason: " + decision);
             }

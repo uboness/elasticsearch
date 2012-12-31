@@ -82,12 +82,18 @@ import java.util.Map;
  */
 public class AwarenessAllocationDecider extends AllocationDecider {
 
+    private final static String NAME = "awareness";
+
     static {
         MetaData.addDynamicSettings(
                 "cluster.routing.allocation.awareness.attributes",
                 "cluster.routing.allocation.awareness.force.*"
         );
     }
+
+    private final static Decision NO = Decision.no(NAME, "");
+    private final static Decision YES_NO_CONFIG = Decision.yes(NAME, "awareness attributes are not configured on the cluster level");
+    private final static Decision YES_WITH_CONFIG = Decision.yes(NAME, "all awareness rules are satisfied");
 
     class ApplySettings implements NodeSettingsService.Listener {
         @Override
@@ -132,7 +138,7 @@ public class AwarenessAllocationDecider extends AllocationDecider {
 
     @Inject
     public AwarenessAllocationDecider(Settings settings, NodeSettingsService nodeSettingsService) {
-        super(settings);
+        super(NAME, settings);
         this.awarenessAttributes = settings.getAsArray("cluster.routing.allocation.awareness.attributes");
 
         forcedAwarenessAttributes = Maps.newHashMap();
@@ -157,17 +163,18 @@ public class AwarenessAllocationDecider extends AllocationDecider {
 
     @Override
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        return underCapacity(shardRouting, node, allocation, true) ? Decision.YES : Decision.NO;
+        return underCapacity(shardRouting, node, allocation, true);
     }
 
     @Override
     public Decision canRemain(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        return underCapacity(shardRouting, node, allocation, false) ? Decision.YES : Decision.NO;
+        return underCapacity(shardRouting, node, allocation, false);
     }
 
-    private boolean underCapacity(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation, boolean moveToNode) {
+    private Decision underCapacity(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation, boolean moveToNode) {
+
         if (awarenessAttributes.length == 0) {
-            return true;
+            return YES_NO_CONFIG;
         }
 
         IndexMetaData indexMetaData = allocation.metaData().index(shardRouting.index());
@@ -175,7 +182,7 @@ public class AwarenessAllocationDecider extends AllocationDecider {
         for (String awarenessAttribute : awarenessAttributes) {
             // the node the shard exists on must be associated with an awareness attribute
             if (!node.node().attributes().containsKey(awarenessAttribute)) {
-                return false;
+                return allocation.decisionDebug(NO, "node [%s/%s] doesn't have attribute [%s] which is required by the cluster configuration", node.node().name(), node.nodeId(), awarenessAttribute);
             }
 
             // build attr_value -> nodes map
@@ -235,8 +242,9 @@ public class AwarenessAllocationDecider extends AllocationDecider {
 
             int currentNodeCount = shardPerAttribute.get(node.node().attributes().get(awarenessAttribute));
             // if we are above with leftover, then we know we are not good, even with mod
-            if (currentNodeCount > (requiredCountPerAttribute + leftoverPerAttribute)) {
-                return false;
+            int maxShardsPerNode = requiredCountPerAttribute + leftoverPerAttribute;
+            if (currentNodeCount > maxShardsPerNode) {
+                return allocation.decisionDebug(NO, "causes over allocation of shards for index [%s] with awareness attribute [%s] (allowed shard count for this attribute is [%s])", shardRouting.index(), awarenessAttribute, maxShardsPerNode);
             }
             // all is well, we are below or same as average
             if (currentNodeCount <= requiredCountPerAttribute) {
@@ -244,6 +252,6 @@ public class AwarenessAllocationDecider extends AllocationDecider {
             }
         }
 
-        return true;
+        return YES_WITH_CONFIG;
     }
 }

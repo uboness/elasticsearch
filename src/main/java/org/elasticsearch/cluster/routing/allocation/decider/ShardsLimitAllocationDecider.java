@@ -38,7 +38,7 @@ import java.util.List;
  * index settings API.
  * <p>
  * If {@value #INDEX_TOTAL_SHARDS_PER_NODE} is reset to a negative value shards
- * per index are unlimited per node. Shards currently in the
+ * per index are unlimited per node (the default). Shards currently in the
  * {@link ShardRoutingState#RELOCATING relocating} state are ignored by this
  * {@link AllocationDecider} until the shard changed its state to either
  * {@link ShardRoutingState#STARTED started},
@@ -50,6 +50,12 @@ import java.util.List;
  * </p>
  */
 public class ShardsLimitAllocationDecider extends AllocationDecider {
+
+    private final static String NAME = "shard limit";
+
+    private final static Decision YES = Decision.yes(NAME, "");
+    private final static Decision YES_NO_LIMIT = Decision.yes(NAME, "no limit on total number of shards per node");
+    private final static Decision NO = Decision.no(NAME, "");
 
     /**
      * Controls the maximum number of shards per index on a single elastic
@@ -65,7 +71,7 @@ public class ShardsLimitAllocationDecider extends AllocationDecider {
 
     @Inject
     public ShardsLimitAllocationDecider(Settings settings) {
-        super(settings);
+        super(NAME, settings);
     }
 
     @Override
@@ -73,7 +79,7 @@ public class ShardsLimitAllocationDecider extends AllocationDecider {
         IndexMetaData indexMd = allocation.routingNodes().metaData().index(shardRouting.index());
         int totalShardsPerNode = indexMd.settings().getAsInt(INDEX_TOTAL_SHARDS_PER_NODE, -1);
         if (totalShardsPerNode <= 0) {
-            return Decision.YES;
+            return YES_NO_LIMIT;
         }
 
         int nodeCount = 0;
@@ -90,9 +96,12 @@ public class ShardsLimitAllocationDecider extends AllocationDecider {
             nodeCount++;
         }
         if (nodeCount >= totalShardsPerNode) {
-            return Decision.NO;
+            return allocation.decisionDebug(NO, "number of index [%s] shards on node [%s/%s] reached the maximum allowed [%s] (set via [index.routing.allocation.total_shards_per_node] index settings]",
+                    shardRouting.index(), node.node().name(), node.nodeId(), totalShardsPerNode);
         }
-        return Decision.YES;
+
+        return allocation.decisionTrace(YES, "number of index [%s] shards on node [%s/%s] is currently [%s] and has not reached the configured limit [%s]",
+                shardRouting.index(), node.node().name(), node.nodeId(), nodeCount, totalShardsPerNode);
     }
 
     @Override
@@ -100,7 +109,7 @@ public class ShardsLimitAllocationDecider extends AllocationDecider {
         IndexMetaData indexMd = allocation.routingNodes().metaData().index(shardRouting.index());
         int totalShardsPerNode = indexMd.settings().getAsInt(INDEX_TOTAL_SHARDS_PER_NODE, -1);
         if (totalShardsPerNode <= 0) {
-            return Decision.YES;
+            return YES_NO_LIMIT;
         }
 
         int nodeCount = 0;
@@ -117,8 +126,11 @@ public class ShardsLimitAllocationDecider extends AllocationDecider {
             nodeCount++;
         }
         if (nodeCount > totalShardsPerNode) {
-            return Decision.NO;
+            return allocation.decisionDebug(NO, "number of index [%s] shards on node [%s/%s] reached the maximum allowed [%s] (set via [index.routing.allocation.total_shards_per_node] index settings]",
+                    shardRouting.index(), node.node().name(), node.nodeId(), totalShardsPerNode);
         }
-        return Decision.YES;
+
+        return allocation.decisionTrace(YES, "number of index [%s] shards on node [%s/%s] is currently [%s] and has not reached the configured limit [%s]",
+                shardRouting.index(), node.node().name(), node.nodeId(), nodeCount, totalShardsPerNode);
     }
 }

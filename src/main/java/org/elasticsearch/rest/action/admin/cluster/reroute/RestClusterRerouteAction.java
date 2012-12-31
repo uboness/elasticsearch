@@ -50,8 +50,15 @@ public class RestClusterRerouteAction extends BaseRestHandler {
     @Override
     public void handleRequest(final RestRequest request, final RestChannel channel) {
         final ClusterRerouteRequest clusterRerouteRequest = Requests.clusterRerouteRequest();
+        final boolean dryRun = request.paramAsBoolean("dry_run", clusterRerouteRequest.dryRun());
+
+        String explainStr = request.param("explain", null);
+        final ClusterRerouteRequest.Explain explain = explainStr == null ? ClusterRerouteRequest.Explain.NONE :
+                ClusterRerouteRequest.Explain.valueOf(explainStr.toUpperCase());
+
         clusterRerouteRequest.listenerThreaded(false);
-        clusterRerouteRequest.dryRun(request.paramAsBoolean("dry_run", clusterRerouteRequest.dryRun()));
+        clusterRerouteRequest.dryRun(dryRun);
+        clusterRerouteRequest.explain(explain);
         if (request.hasContent()) {
             try {
                 clusterRerouteRequest.source(request.content());
@@ -79,6 +86,12 @@ public class RestClusterRerouteAction extends BaseRestHandler {
                     }
                     response.state().settingsFilter(settingsFilter).toXContent(builder, request);
                     builder.endObject();
+
+                    // by default, detailed explanation for dry runs
+                    if (explain != ClusterRerouteRequest.Explain.NONE) {
+                        builder.field("explanation");
+                        response.explanation().toXContent(builder, request);
+                    }
 
                     builder.endObject();
                     channel.sendResponse(new XContentRestResponse(request, RestStatus.OK, builder));

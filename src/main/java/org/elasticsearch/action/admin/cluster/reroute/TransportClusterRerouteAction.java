@@ -24,6 +24,7 @@ import org.elasticsearch.action.support.master.TransportMasterNodeOperationActio
 import org.elasticsearch.cluster.ClusterService;
 import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.ProcessedClusterStateUpdateTask;
+import org.elasticsearch.cluster.routing.allocation.AllocationExplanation;
 import org.elasticsearch.cluster.routing.allocation.AllocationService;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.common.inject.Inject;
@@ -73,13 +74,19 @@ public class TransportClusterRerouteAction extends TransportMasterNodeOperationA
     protected ClusterRerouteResponse masterOperation(final ClusterRerouteRequest request, ClusterState state) throws ElasticSearchException {
         final AtomicReference<Throwable> failureRef = new AtomicReference<Throwable>();
         final AtomicReference<ClusterState> clusterStateResponse = new AtomicReference<ClusterState>();
+        final AtomicReference<AllocationExplanation> allocationExplanation = new AtomicReference<AllocationExplanation>();
         final CountDownLatch latch = new CountDownLatch(1);
+
+        final AllocationExplanation.Level explanationLevel = request.explain().explanationLevel();
 
         clusterService.submitStateUpdateTask("cluster_reroute (api)", new ProcessedClusterStateUpdateTask() {
             @Override
             public ClusterState execute(ClusterState currentState) {
                 try {
-                    RoutingAllocation.Result routingResult = allocationService.reroute(currentState, request.commands);
+                    RoutingAllocation.Result routingResult = request.dryRun ?
+                            allocationService.reroute(currentState, request.commands, explanationLevel) :
+                            allocationService.reroute(currentState, request.commands);
+                    allocationExplanation.set(routingResult.explanation());
                     ClusterState newState = newClusterStateBuilder().state(currentState).routingResult(routingResult).build();
                     clusterStateResponse.set(newState);
                     if (request.dryRun) {
@@ -116,7 +123,7 @@ public class TransportClusterRerouteAction extends TransportMasterNodeOperationA
             }
         }
 
-        return new ClusterRerouteResponse(clusterStateResponse.get());
+        return new ClusterRerouteResponse(clusterStateResponse.get(), allocationExplanation.get());
 
     }
 }

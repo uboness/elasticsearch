@@ -20,7 +20,6 @@
 package org.elasticsearch.cluster.routing.allocation;
 
 import com.google.common.collect.Lists;
-
 import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.ElasticSearchIllegalStateException;
 import org.elasticsearch.cluster.ClusterState;
@@ -74,23 +73,33 @@ public class AllocationService extends AbstractComponent {
         this.shardsAllocators = shardsAllocators;
     }
 
+    public RoutingAllocation.Result applyStartedShards(ClusterState clusterState, List<? extends ShardRouting> startedShards) {
+        return applyStartedShards(clusterState, startedShards, resolveDefaultExplanationLevel());
+    }
+
     /**
      * Applies the started shards. Note, shards can be called several times within this method.
      * <p/>
      * <p>If the same instance of the routing table is returned, then no change has been made.</p>
      */
-    public RoutingAllocation.Result applyStartedShards(ClusterState clusterState, List<? extends ShardRouting> startedShards) {
+    public RoutingAllocation.Result applyStartedShards(ClusterState clusterState, List<? extends ShardRouting> startedShards, AllocationExplanation.Level explanationLevel) {
         RoutingNodes routingNodes = clusterState.routingNodes();
         // shuffle the unassigned nodes, just so we won't have things like poison failed shards
         Collections.shuffle(routingNodes.unassigned());
-        StartedRerouteAllocation allocation = new StartedRerouteAllocation(allocationDeciders, routingNodes, clusterState.nodes(), startedShards);
+        StartedRerouteAllocation allocation = new StartedRerouteAllocation(allocationDeciders, routingNodes, clusterState.nodes(), explanationLevel, startedShards);
         boolean changed = applyStartedShards(routingNodes, startedShards);
         if (!changed) {
+            logAllocationExplanationIfNeeded(allocation.explanation());
             return new RoutingAllocation.Result(false, clusterState.routingTable(), allocation.explanation());
         }
         shardsAllocators.applyStartedShards(allocation);
         reroute(allocation);
+        logAllocationExplanationIfNeeded(allocation.explanation());
         return new RoutingAllocation.Result(true, new RoutingTable.Builder().updateNodes(routingNodes).build().validateRaiseException(clusterState.metaData()), allocation.explanation());
+    }
+
+    public RoutingAllocation.Result applyFailedShard(ClusterState clusterState, ShardRouting failedShard) {
+        return applyFailedShard(clusterState, failedShard, resolveDefaultExplanationLevel());
     }
 
     /**
@@ -98,26 +107,32 @@ public class AllocationService extends AbstractComponent {
      * <p/>
      * <p>If the same instance of the routing table is returned, then no change has been made.</p>
      */
-    public RoutingAllocation.Result applyFailedShard(ClusterState clusterState, ShardRouting failedShard) {
+    public RoutingAllocation.Result applyFailedShard(ClusterState clusterState, ShardRouting failedShard, AllocationExplanation.Level explanationLevel) {
         RoutingNodes routingNodes = clusterState.routingNodes();
         // shuffle the unassigned nodes, just so we won't have things like poison failed shards
         Collections.shuffle(routingNodes.unassigned());
-        FailedRerouteAllocation allocation = new FailedRerouteAllocation(allocationDeciders, routingNodes, clusterState.nodes(), failedShard);
+        FailedRerouteAllocation allocation = new FailedRerouteAllocation(allocationDeciders, routingNodes, clusterState.nodes(), explanationLevel, failedShard);
         boolean changed = applyFailedShard(allocation, failedShard);
         if (!changed) {
+            logAllocationExplanationIfNeeded(allocation.explanation());
             return new RoutingAllocation.Result(false, clusterState.routingTable(), allocation.explanation());
         }
         shardsAllocators.applyFailedShards(allocation);
         reroute(allocation);
+        logAllocationExplanationIfNeeded(allocation.explanation());
         return new RoutingAllocation.Result(true, new RoutingTable.Builder().updateNodes(routingNodes).build().validateRaiseException(clusterState.metaData()), allocation.explanation());
     }
 
     public RoutingAllocation.Result reroute(ClusterState clusterState, AllocationCommands commands) throws ElasticSearchException {
+        return reroute(clusterState, commands, resolveDefaultExplanationLevel());
+    }
+
+    public RoutingAllocation.Result reroute(ClusterState clusterState, AllocationCommands commands, AllocationExplanation.Level explanationLevel) throws ElasticSearchException {
         RoutingNodes routingNodes = clusterState.routingNodes();
         // we don't shuffle the unassigned shards here, to try and get as close as possible to
         // a consistent result of the effect the commands have on the routing
         // this allows systems to dry run the commands, see the resulting cluster state, and act on it
-        RoutingAllocation allocation = new RoutingAllocation(allocationDeciders, routingNodes, clusterState.nodes());
+        RoutingAllocation allocation = new RoutingAllocation(allocationDeciders, routingNodes, clusterState.nodes(), explanationLevel);
         // we ignore disable allocation, because commands are explicit
         allocation.ignoreDisable(true);
         commands.execute(allocation);
@@ -126,7 +141,12 @@ public class AllocationService extends AbstractComponent {
         // the assumption is that commands will move / act on shards (or fail through exceptions)
         // so, there will always be shard "movements", so no need to check on reroute
         reroute(allocation);
+        logAllocationExplanationIfNeeded(allocation.explanation());
         return new RoutingAllocation.Result(true, new RoutingTable.Builder().updateNodes(routingNodes).build().validateRaiseException(clusterState.metaData()), allocation.explanation());
+    }
+
+    public RoutingAllocation.Result reroute(ClusterState clusterState) {
+        return reroute(clusterState, resolveDefaultExplanationLevel());
     }
 
     /**
@@ -134,15 +154,21 @@ public class AllocationService extends AbstractComponent {
      * <p/>
      * <p>If the same instance of the routing table is returned, then no change has been made.
      */
-    public RoutingAllocation.Result reroute(ClusterState clusterState) {
+    public RoutingAllocation.Result reroute(ClusterState clusterState, AllocationExplanation.Level explanationLevel) {
         RoutingNodes routingNodes = clusterState.routingNodes();
         // shuffle the unassigned nodes, just so we won't have things like poison failed shards
         Collections.shuffle(routingNodes.unassigned());
-        RoutingAllocation allocation = new RoutingAllocation(allocationDeciders, routingNodes, clusterState.nodes());
+        RoutingAllocation allocation = new RoutingAllocation(allocationDeciders, routingNodes, clusterState.nodes(), explanationLevel);
         if (!reroute(allocation)) {
+            logAllocationExplanationIfNeeded(allocation.explanation());
             return new RoutingAllocation.Result(false, clusterState.routingTable(), allocation.explanation());
         }
+        logAllocationExplanationIfNeeded(allocation.explanation());
         return new RoutingAllocation.Result(true, new RoutingTable.Builder().updateNodes(routingNodes).build().validateRaiseException(clusterState.metaData()), allocation.explanation());
+    }
+
+    public RoutingAllocation.Result rerouteWithNoReassign(ClusterState clusterState) {
+        return rerouteWithNoReassign(clusterState, resolveDefaultExplanationLevel());
     }
 
     /**
@@ -150,11 +176,11 @@ public class AllocationService extends AbstractComponent {
      * make sure to handle removed nodes, but only moved the shards to UNASSIGNED, does not reassign
      * them.
      */
-    public RoutingAllocation.Result rerouteWithNoReassign(ClusterState clusterState) {
+    public RoutingAllocation.Result rerouteWithNoReassign(ClusterState clusterState, AllocationExplanation.Level explanationLevel) {
         RoutingNodes routingNodes = clusterState.routingNodes();
         // shuffle the unassigned nodes, just so we won't have things like poison failed shards
         Collections.shuffle(routingNodes.unassigned());
-        RoutingAllocation allocation = new RoutingAllocation(allocationDeciders, routingNodes, clusterState.nodes());
+        RoutingAllocation allocation = new RoutingAllocation(allocationDeciders, routingNodes, clusterState.nodes(), explanationLevel);
         Iterable<DiscoveryNode> dataNodes = allocation.nodes().dataNodes().values();
         boolean changed = false;
         // first, clear from the shards any node id they used to belong to that is now dead
@@ -167,9 +193,12 @@ public class AllocationService extends AbstractComponent {
         // will be moved to primary state and not wait for primaries to be allocated and recovered (*from gateway*)
         changed |= electPrimaries(allocation.routingNodes());
 
+        logAllocationExplanationIfNeeded(allocation.explanation());
+
         if (!changed) {
             return new RoutingAllocation.Result(false, clusterState.routingTable(), allocation.explanation());
         }
+
         return new RoutingAllocation.Result(true, new RoutingTable.Builder().updateNodes(routingNodes).build().validateRaiseException(clusterState.metaData()), allocation.explanation());
     }
 
@@ -498,6 +527,22 @@ public class AllocationService extends AbstractComponent {
                 }
             }
             return dirty;
+        }
+    }
+
+    private AllocationExplanation.Level resolveDefaultExplanationLevel() {
+        if (logger.isTraceEnabled()) {
+            return AllocationExplanation.Level.TRACE;
+        }
+        if (logger.isDebugEnabled()) {
+            return AllocationExplanation.Level.DEBUG;
+        }
+        return AllocationExplanation.Level.INFO;
+    }
+
+    private void logAllocationExplanationIfNeeded(AllocationExplanation explanation) {
+        if (logger.isDebugEnabled()) {
+            logger.debug(explanation.toString());
         }
     }
 }

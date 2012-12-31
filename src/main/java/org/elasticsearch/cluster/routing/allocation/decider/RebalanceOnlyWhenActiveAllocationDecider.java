@@ -32,9 +32,14 @@ import java.util.List;
  */
 public class RebalanceOnlyWhenActiveAllocationDecider extends AllocationDecider {
 
+    public final static String NAME = "rebalance only when active";
+
+    private final Decision NO = Decision.no(NAME, "");
+    private final Decision YES = Decision.yes(NAME, "all shards in the shard replication group are active");
+
     @Inject
     public RebalanceOnlyWhenActiveAllocationDecider(Settings settings) {
-        super(settings);
+        super(NAME, settings);
     }
 
     @Override
@@ -43,10 +48,11 @@ public class RebalanceOnlyWhenActiveAllocationDecider extends AllocationDecider 
         // its ok to check for active here, since in relocation, a shard is split into two in routing
         // nodes, once relocating, and one initializing
         for (int i = 0; i < shards.size(); i++) {
-            if (!shards.get(i).active()) {
-                return Decision.NO;
+            ShardRouting shard = shards.get(i);
+            if (!shard.active()) {
+                return allocation.decisionDebug(NO, "not all shards in the shard replication group are active [%s is %s]", shard.shardId(), shard.state());
             }
         }
-        return Decision.YES;
+        return YES;
     }
 }
