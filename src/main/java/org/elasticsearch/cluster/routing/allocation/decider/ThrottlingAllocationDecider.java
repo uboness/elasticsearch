@@ -47,11 +47,13 @@ import java.util.List;
  * </ul>
  * 
  * If one of the above thresholds is exceeded per node this allocation decider
- * will return {@link Decision#THROTTLE} as a hit to upstream logic to throttle
+ * will return a decision of type {@link Decision.Type#THROTTLE} as a hint to upstream logic to throttle
  * the allocation process to prevent overloading nodes due to too many concurrent recovery
  * processes.
  */
 public class ThrottlingAllocationDecider extends AllocationDecider {
+
+    private final static String NAME = "throttling";
 
     static {
         MetaData.addDynamicSettings(
@@ -60,12 +62,15 @@ public class ThrottlingAllocationDecider extends AllocationDecider {
         );
     }
 
+    private final static Decision YES = Decision.yes(NAME, "");
+    private final static Decision THROTTLE = Decision.throttle(NAME, "");
+
     private volatile int primariesInitialRecoveries;
     private volatile int concurrentRecoveries;
 
     @Inject
     public ThrottlingAllocationDecider(Settings settings, NodeSettingsService nodeSettingsService) {
-        super(settings);
+        super(NAME, settings);
 
         this.primariesInitialRecoveries = settings.getAsInt("cluster.routing.allocation.node_initial_primaries_recoveries", settings.getAsInt("cluster.routing.allocation.node_initial_primaries_recoveries", 4));
         this.concurrentRecoveries = settings.getAsInt("cluster.routing.allocation.concurrent_recoveries", settings.getAsInt("cluster.routing.allocation.node_concurrent_recoveries", 2));
@@ -95,10 +100,10 @@ public class ThrottlingAllocationDecider extends AllocationDecider {
                     }
                 }
                 if (primariesInRecovery >= primariesInitialRecoveries) {
-                    return Decision.THROTTLE;
-                } else {
-                    return Decision.YES;
+                    return allocation.decisionDebug(THROTTLE, "the currently ongoing primary shard recoveries count has reached the currently set limit [%s]", primariesInitialRecoveries);
                 }
+
+                return allocation.decisionTrace(YES, "the currently ongoing primary shard recoveries count is [%s] as has not yet reached the currently set limit [%s]", primariesInRecovery, primariesInitialRecoveries);
             }
         }
 
@@ -115,10 +120,10 @@ public class ThrottlingAllocationDecider extends AllocationDecider {
         }
 
         if (currentRecoveries >= concurrentRecoveries) {
-            return Decision.THROTTLE;
-        } else {
-            return Decision.YES;
+            return allocation.decisionDebug(THROTTLE, "the currently ongoing (concurrent) shard recoveries count has reached to currently set limit [%s]", concurrentRecoveries);
         }
+
+        return allocation.decisionTrace(YES, "the currently ongoing (concurrent) shard recoveries count [%s] has not yet reached the set limit [%s]", currentRecoveries, concurrentRecoveries);
     }
 
     class ApplySettings implements NodeSettingsService.Listener {

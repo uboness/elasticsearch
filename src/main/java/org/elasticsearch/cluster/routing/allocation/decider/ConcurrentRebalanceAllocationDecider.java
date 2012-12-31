@@ -32,8 +32,7 @@ import org.elasticsearch.node.settings.NodeSettingsService;
 import java.util.List;
 
 /**
- * Similar to the {@link ClusterRebalanceAllocationDecider} this
- * {@link AllocationDecider} controls the number of currently in-progress
+ * An {@link AllocationDecider} that controls the number of currently in-progress
  * re-balance (relocation) operations and restricts node allocations if the
  * configured threashold is reached. The default number of concurrent rebalance
  * operations is set to <tt>2</tt>
@@ -46,11 +45,17 @@ import java.util.List;
  */
 public class ConcurrentRebalanceAllocationDecider extends AllocationDecider {
 
+    private final static String NAME = "concurrent rebalance";
+
     static {
         MetaData.addDynamicSettings(
                 "cluster.routing.allocation.cluster_concurrent_rebalance"
         );
     }
+
+    private final static Decision NO = Decision.no(NAME, "");
+    private final static Decision UNLIMITED_YES_DECISION = Decision.yes(NAME, "[cluster.routing.allocation.cluster_concurrent_rebalance] is set to [-1] therefore there is no restriction on number of concurrent rebalancing operations");
+    private final static Decision ALLOWED_YES_DECISION = Decision.yes(NAME, "number of current rebalancing operations has not reached the limit yet");
 
     class ApplySettings implements NodeSettingsService.Listener {
         @Override
@@ -67,7 +72,7 @@ public class ConcurrentRebalanceAllocationDecider extends AllocationDecider {
 
     @Inject
     public ConcurrentRebalanceAllocationDecider(Settings settings, NodeSettingsService nodeSettingsService) {
-        super(settings);
+        super(NAME, settings);
         this.clusterConcurrentRebalance = settings.getAsInt("cluster.routing.allocation.cluster_concurrent_rebalance", 2);
         logger.debug("using [cluster_concurrent_rebalance] with [{}]", clusterConcurrentRebalance);
         nodeSettingsService.addListener(new ApplySettings());
@@ -76,7 +81,7 @@ public class ConcurrentRebalanceAllocationDecider extends AllocationDecider {
     @Override
     public Decision canRebalance(ShardRouting shardRouting, RoutingAllocation allocation) {
         if (clusterConcurrentRebalance == -1) {
-            return Decision.YES;
+            return UNLIMITED_YES_DECISION;
         }
         int rebalance = 0;
         for (RoutingNode node : allocation.routingNodes()) {
@@ -88,8 +93,8 @@ public class ConcurrentRebalanceAllocationDecider extends AllocationDecider {
             }
         }
         if (rebalance >= clusterConcurrentRebalance) {
-            return Decision.NO;
+            return allocation.decisionDebug(NO, "number of current rebalancing operations has reached the limit allowed ([cluster.routing.allocation.cluster_concurrent_rebalance] is set to [%s])", clusterConcurrentRebalance);
         }
-        return Decision.YES;
+        return ALLOWED_YES_DECISION;
     }
 }

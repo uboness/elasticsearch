@@ -19,6 +19,7 @@
 
 package org.elasticsearch.common.xcontent;
 
+import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.common.Booleans;
 
 import java.io.IOException;
@@ -97,6 +98,37 @@ public interface ToXContent {
                 return defaultValue;
             }
             return !(sValue.equals("false") || sValue.equals("0") || sValue.equals("off"));
+        }
+    }
+
+    public static class ParamsBuilder {
+
+        public static ParamsBuilder newBuilder() {
+            return new ParamsBuilder();
+        }
+
+        private final ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
+
+        private ParamsBuilder() {
+        }
+
+        public ParamsBuilder put(String key, Object value) {
+            builder.put(key, String.valueOf(value));
+            return this;
+        }
+
+        public ParamsBuilder put(String key, String value) {
+            builder.put(key, value);
+            return this;
+        }
+
+        public ParamsBuilder putAll(Map<String, String> params) {
+            builder.putAll(params);
+            return this;
+        }
+
+        public Params build() {
+            return new MapParams(builder.build());
         }
     }
 

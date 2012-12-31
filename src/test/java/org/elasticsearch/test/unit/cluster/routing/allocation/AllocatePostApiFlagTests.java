@@ -48,7 +48,9 @@ public class AllocatePostApiFlagTests {
 
     @Test
     public void simpleFlagTests() {
-        AllocationService allocation = new AllocationService(settingsBuilder().put("cluster.routing.allocation.concurrent_recoveries", 10).build());
+        AllocationService allocation = new AllocationService(settingsBuilder()
+                .put("cluster.routing.allocation.concurrent_recoveries", 10)
+                .build());
 
         logger.info("creating an index with 1 shard, no replica");
         MetaData metaData = newMetaDataBuilder()

@@ -32,36 +32,46 @@ import org.elasticsearch.common.settings.Settings;
  */
 public abstract class AllocationDecider extends AbstractComponent {
 
+    private final String name;
+
     /**
      * Initializes a new {@link AllocationDecider}
      * @param settings {@link Settings} used by this {@link AllocationDecider}
      */
-    protected AllocationDecider(Settings settings) {
+    protected AllocationDecider(String name, Settings settings) {
         super(settings);
+        this.name = name;
+    }
+
+    /**
+     * @return The name of this allocation decider
+     */
+    public String name() {
+        return name;
     }
 
     /**
      * Returns a {@link Decision} whether the given shard routing can be
-     * re-balanced to the given allocation. The default is
-     * {@link Decision#ALWAYS}.
+     * re-balanced within the given allocation. The default is
+     * {@link Decision#NOT_APPLICABLE}.
      */
     public Decision canRebalance(ShardRouting shardRouting, RoutingAllocation allocation) {
-        return Decision.ALWAYS;
+        return Decision.NOT_APPLICABLE;
     }
 
     /**
      * Returns a {@link Decision} whether the given shard routing can be
-     * allocated on the given node. The default is {@link Decision#ALWAYS}.
+     * allocated on the given node. The default is {@link Decision#NOT_APPLICABLE}.
      */
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        return Decision.ALWAYS;
+        return Decision.NOT_APPLICABLE;
     }
 
     /**
      * Returns a {@link Decision} whether the given shard routing can be remain
-     * on the given node. The default is {@link Decision#ALWAYS}.
+     * on the given node. The default is {@link Decision#NOT_APPLICABLE}.
      */
     public Decision canRemain(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        return Decision.ALWAYS;
+        return Decision.NOT_APPLICABLE;
     }
 }

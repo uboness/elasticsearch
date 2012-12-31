@@ -20,7 +20,15 @@
 package org.elasticsearch.cluster.routing.allocation.decider;
 
 import com.google.common.collect.Lists;
+import org.elasticsearch.common.Strings;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
+import org.elasticsearch.common.logging.ESLogger;
+import org.elasticsearch.common.logging.ESLoggerFactory;
+import org.elasticsearch.common.xcontent.ToXContent;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 
+import java.io.IOException;
 import java.util.List;
 
 /**
@@ -29,22 +37,59 @@ import java.util.List;
  * 
  * @see AllocationDecider
  */
-public abstract class Decision {
+public abstract class Decision implements ToXContent {
 
-    public static final Decision ALWAYS = new Single(Type.YES);
-    public static final Decision YES = new Single(Type.YES);
-    public static final Decision NO = new Single(Type.NO);
-    public static final Decision THROTTLE = new Single(Type.THROTTLE);
+    private static final ESLogger logger = ESLoggerFactory.getLogger(Decision.class.getName());
 
-    /**
-     * Creates a simple decision 
-     * @param type {@link Type} of the decision
-     * @param explanation explanation of the decision
-     * @param explanationParams additional parameters for the decision
-     * @return new {@link Decision} instance
-     */
-    public static Decision single(Type type, String explanation, Object... explanationParams) {
-        return new Single(type, explanation, explanationParams);
+    public static final Decision NOT_APPLICABLE = new Single(null, Type.YES, "");
+    public static final Decision NO = new Single(null, Type.NO, "");
+
+
+    public static Decision single(Type type, String title, String explanation, Object... explanationParams) {
+        return new Single(title, type, explanation, explanationParams);
+    }
+
+    public static Decision yes(String title, String explanation, Object... explanationParams) {
+        return new Single(title, Type.YES, explanation, explanationParams);
+    }
+
+    public static Decision no(String title, String explanation, Object... explanationParams) {
+        return new Single(title, Type.NO, explanation, explanationParams);
+    }
+
+    public static Decision throttle(String title, String explanation, Object... explanationParams) {
+        return new Single(title, Type.THROTTLE, explanation, explanationParams);
+    }
+
+    public static Decision readDecision(StreamInput in) throws IOException {
+        boolean isMulti = in.readBoolean();
+        Type type = Type.valueOf(in.readString());
+        String title = in.readString();
+        if (isMulti) {
+            Multi multi = new Multi(title);
+            int size = in.readInt();
+            for (int i = 0; i < size; i++) {
+                multi.add(readDecision(in));
+            }
+            return multi;
+        }
+        return new Single(title, type, in.readString());
+    }
+
+    public static void writeDecision(Decision decision, StreamOutput out) throws IOException {
+        boolean isMulti = decision instanceof Multi;
+        out.writeBoolean(isMulti);
+        out.writeString(decision.type().name());
+        out.writeString(decision.title());
+        if (isMulti) {
+            Multi multi = (Multi) decision;
+            out.writeInt(multi.decisions.size());
+            for (Decision sub : multi.decisions) {
+                writeDecision(sub, out);
+            }
+        } else {
+            out.writeString(decision.toString());
+        }
     }
 
     /**
@@ -57,16 +102,47 @@ public abstract class Decision {
         THROTTLE
     }
 
+    protected final String title;
+
+    Decision(String title) {
+        this.title = title;
+    }
+
+    public String title() {
+        return title;
+    }
+
     /**
-     * Get the {@link Type} of this decision
      * @return {@link Type} of this decision
      */
     public abstract Type type();
 
     /**
+     * @return The explanation for this decision
+     */
+    public abstract String explanation();
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        if (title != null) {
+            sb.append('[').append(title).append(']').append(": ");
+        }
+        sb.append(type());
+        if (logger.isTraceEnabled()) {
+            String explanation = explanation();
+            if (Strings.hasText(explanation)) {
+                sb.append(" (").append(explanation).append(')');
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
      * Simple class representing a single decision
      */
     public static class Single extends Decision {
+
         private final Type type;
         private final String explanation;
         private final Object[] explanationParams;
@@ -75,8 +151,8 @@ public abstract class Decision {
          * Creates a new {@link Single} decision of a given type 
          * @param type {@link Type} of the decision
          */
-        public Single(Type type) {
-            this(type, null, (Object[]) null);
+        public Single(String title, Type type) {
+            this(title, type, null, (Object[]) null);
         }
 
         /**
@@ -86,7 +162,8 @@ public abstract class Decision {
          * @param explanation An explanation of this {@link Decision}
          * @param explanationParams A set of additional parameters
          */
-        public Single(Type type, String explanation, Object... explanationParams) {
+        public Single(String title, Type type, String explanation, Object... explanationParams) {
+            super(title);
             this.type = type;
             this.explanation = explanation;
             this.explanationParams = explanationParams;
@@ -98,11 +175,17 @@ public abstract class Decision {
         }
 
         @Override
-        public String toString() {
-            if (explanation == null) {
-                return type + "()";
-            }
-            return type + "(" + String.format(explanation, explanationParams) + ")";
+        public String explanation() {
+            return String.format(explanation, explanationParams);
+        }
+
+        @Override
+        public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+            builder.startObject();
+            builder.field("decider", title);
+            builder.field("result", type.name());
+            builder.field("reason", explanation());
+            return builder.endObject();
         }
     }
 
@@ -113,6 +196,10 @@ public abstract class Decision {
 
         private final List<Decision> decisions = Lists.newArrayList();
 
+        public Multi(String title) {
+            super(title);
+        }
+
         /**
          * Add a decission to this {@link Multi}decision instance
          * @param decision {@link Decision} to add
@@ -121,6 +208,10 @@ public abstract class Decision {
         public Multi add(Decision decision) {
             decisions.add(decision);
             return this;
+        }
+
+        public List<Decision> decisions() {
+            return decisions;
         }
 
         @Override
@@ -138,12 +229,56 @@ public abstract class Decision {
         }
 
         @Override
-        public String toString() {
+        public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
+            builder.startObject();
+            builder.field("decider", title);
+            builder.field("result", type().name());
+            builder.startArray("reason");
+            for (Decision sub : decisions) {
+                sub.toXContent(builder, params);
+            }
+            builder.endArray();
+            builder.endObject();
+            return builder;
+        }
+
+        @Override
+        public String explanation() {
+            return explanation(0);
+        }
+
+        private String explanation(int indent) {
             StringBuilder sb = new StringBuilder();
             for (Decision decision : decisions) {
-                sb.append("[").append(decision.toString()).append("]");
+                sb.append('\n');
+                Strings.appendSpaceTabs(indent+1, sb);
+                if (decision instanceof Multi) {
+                    sb.append(((Multi) decision).toString(indent + 1));
+                } else {
+                    sb.append(decision);
+                }
             }
             return sb.toString();
         }
+
+
+        @Override
+        public String toString() {
+            return toString(0);
+        }
+
+        private String toString(int indent) {
+            StringBuilder sb = new StringBuilder();
+            if (title != null) {
+                sb.append('[').append(title).append(']').append(": ");
+            }
+            sb.append(type());
+            String explanation = explanation(indent);
+            if (Strings.hasText(explanation)) {
+                sb.append(" (").append(explanation).append(')');
+            }
+            return sb.toString();
+        }
+
     }
 }

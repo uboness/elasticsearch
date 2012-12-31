@@ -19,12 +19,14 @@
 
 package org.elasticsearch.common;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import gnu.trove.set.hash.THashSet;
 import org.elasticsearch.common.io.FastStringReader;
 
 import java.io.BufferedReader;
+import java.lang.reflect.Array;
 import java.util.*;
 
 /**
@@ -43,6 +45,26 @@ public class Strings {
     private static final String CURRENT_PATH = ".";
 
     private static final char EXTENSION_SEPARATOR = '.';
+
+    public static final ToStringFunction DEFAULT_TO_STRING_FUNCTION = new ToStringFunction();
+
+    public static void appendSpaceTabs(int tabs, StringBuilder sb) {
+        appendSpaceTabs(tabs, 4, sb);
+    }
+
+    public static void appendSpaceTabs(int tabs, int tabSize, StringBuilder sb) {
+        appendTabs(tabs*tabSize, ' ', sb);
+    }
+
+    public static void appendTabs(int tabs, StringBuilder sb) {
+        appendTabs(tabs, '\t', sb);
+    }
+
+    public static void appendTabs(int tabs, char tab, StringBuilder sb) {
+        for (int i = 0; i < tabs; i++) {
+            sb.append(tab);
+        }
+    }
 
     public static void tabify(int tabs, String from, StringBuilder to) throws Exception {
         BufferedReader reader = new BufferedReader(new FastStringReader(from));
@@ -1302,7 +1324,7 @@ public class Strings {
         }
         Iterator it = coll.iterator();
         while (it.hasNext()) {
-            sb.append(prefix).append(it.next()).append(suffix);
+            sb.append(prefix).append(objectToString(it.next())).append(suffix);
             if (it.hasNext()) {
                 sb.append(delim);
             }
@@ -1346,16 +1368,7 @@ public class Strings {
     }
 
     public static String arrayToDelimitedString(Object[] arr, String delim, StringBuilder sb) {
-        if (isEmpty(arr)) {
-            return "";
-        }
-        for (int i = 0; i < arr.length; i++) {
-            if (i > 0) {
-                sb.append(delim);
-            }
-            sb.append(arr[i]);
-        }
-        return sb.toString();
+        return arrayToDelimitedString(arr, delim, DEFAULT_TO_STRING_FUNCTION, sb);
     }
 
     /**
@@ -1367,6 +1380,74 @@ public class Strings {
      */
     public static String arrayToCommaDelimitedString(Object[] arr) {
         return arrayToDelimitedString(arr, ",");
+    }
+
+    public static <T> String arrayToCommaDelimitedString(T[] arr, Function<T, String> toStringFunction) {
+        return arrayToDelimitedString(arr, ",", toStringFunction);
+    }
+
+    public static <T> String arrayToDelimitedString(T[] arr, String delim, Function<T, String> toStringFunction) {
+        return arrayToDelimitedString(arr, delim, toStringFunction, new StringBuilder());
+    }
+
+    public static <T> String arrayToDelimitedString(T[] arr, String delim, Function<T, String> toStringFunction, StringBuilder sb) {
+        if (isEmpty(arr)) {
+            return "";
+        }
+        for (int i = 0; i < arr.length; i++) {
+            if (i > 0) {
+                sb.append(delim);
+            }
+            sb.append(toStringFunction.apply(arr[i]));
+        }
+        return sb.toString();
+    }
+
+    public static String mapToCommaDelimitedString(Map<?, ?> map, String entryPrefix, String entrySuffix, String valuePrefix, String valueSuffix, String keyValueDelim, String entryDelim) {
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry entry : map.entrySet()) {
+            if (sb.length() > 0) {
+                sb.append(entryDelim);
+            }
+            sb.append(entryPrefix)
+                    .append(valuePrefix)
+                    .append(objectToString(entry.getKey()))
+                    .append(valueSuffix)
+                    .append(keyValueDelim)
+                    .append(valuePrefix)
+                    .append(objectToString(entry.getValue()))
+                    .append(valueSuffix)
+                    .append(entrySuffix);
+        }
+        return sb.toString();
+    }
+
+    public static String objectToString(Object value) {
+        if (value.getClass().isArray()) {
+            return arrayToDelimitedString(value, ",");
+        }
+        if (value instanceof Collection) {
+            return collectionToDelimitedString((Collection) value, ",");
+        }
+        if (value instanceof Map) {
+            return mapToCommaDelimitedString((Map) value, "{", "}", "[", "]", "=>", ",");
+        }
+        return String.valueOf(value);
+    }
+
+    public static String arrayToDelimitedString(Object arr, String delim) {
+        assert arr.getClass().isArray() : "expecting an array object";
+        if (arr == null || Array.getLength(arr) == 0) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Array.getLength(arr); i++) {
+            if (i > 0) {
+                sb.append(delim);
+            }
+            sb.append(objectToString(Array.get(arr,  i)));
+        }
+        return sb.toString();
     }
 
     /**
@@ -1491,5 +1572,12 @@ public class Strings {
 
     private Strings() {
 
+    }
+
+    static class ToStringFunction implements Function<Object, String> {
+        @Override
+        public String apply(Object input) {
+            return String.valueOf(input);
+        }
     }
 }

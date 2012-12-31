@@ -19,6 +19,7 @@
 
 package org.elasticsearch.cluster.routing;
 
+import com.google.common.base.Function;
 import org.elasticsearch.ElasticSearchIllegalStateException;
 import org.elasticsearch.cluster.node.DiscoveryNode;
 
@@ -33,6 +34,8 @@ import static com.google.common.collect.Lists.newArrayList;
  * that are hosted on that nodes. Each {@link RoutingNode} has a unique node id that can be used to identify the node.
  */
 public class RoutingNode implements Iterable<MutableShardRouting> {
+
+    public static final Function<RoutingNode, String> TO_NODE_ID_FUNCTION = new ToNodeIdFunction();
 
     private final String nodeId;
 
@@ -199,5 +202,12 @@ public class RoutingNode implements Iterable<MutableShardRouting> {
             sb.append("--------").append(entry.shortSummary()).append('\n');
         }
         return sb.toString();
+    }
+
+    static class ToNodeIdFunction implements Function<RoutingNode, String> {
+        @Override
+        public String apply(RoutingNode node) {
+            return node == null ? null : node.nodeId();
+        }
     }
 }

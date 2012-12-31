@@ -30,7 +30,8 @@ import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.node.settings.NodeSettingsService;
 
-import static org.elasticsearch.cluster.node.DiscoveryNodeFilters.OpType.*;
+import static org.elasticsearch.cluster.node.DiscoveryNodeFilters.OpType.AND;
+import static org.elasticsearch.cluster.node.DiscoveryNodeFilters.OpType.OR;
 
 /**
  * This {@link AllocationDecider} control shard allocation by include and
@@ -62,6 +63,8 @@ import static org.elasticsearch.cluster.node.DiscoveryNodeFilters.OpType.*;
  */
 public class FilterAllocationDecider extends AllocationDecider {
 
+    private final static String NAME = "filter";
+
     static {
         MetaData.addDynamicSettings(
                 "cluster.routing.allocation.require.*",
@@ -75,13 +78,17 @@ public class FilterAllocationDecider extends AllocationDecider {
         );
     }
 
+    private final static Decision YES = Decision.yes(NAME, "All allocation filters are satisfied");
+    private final static Decision NO = Decision.no(NAME, "Some allocation filters are not satisfied");
+    private final static Decision YES_NO_FILTERS = Decision.yes(NAME, "No allocation filters are configured");
+
     private volatile DiscoveryNodeFilters clusterRequireFilters;
     private volatile DiscoveryNodeFilters clusterIncludeFilters;
     private volatile DiscoveryNodeFilters clusterExcludeFilters;
 
     @Inject
     public FilterAllocationDecider(Settings settings, NodeSettingsService nodeSettingsService) {
-        super(settings);
+        super(NAME, settings);
         ImmutableMap<String, String> requireMap = settings.getByPrefix("cluster.routing.allocation.require.").getAsMap();
         if (requireMap.isEmpty()) {
             clusterRequireFilters = null;
@@ -105,49 +112,100 @@ public class FilterAllocationDecider extends AllocationDecider {
 
     @Override
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        return shouldFilter(shardRouting, node, allocation) ? Decision.NO : Decision.YES;
+        return allowed(shardRouting, node, allocation);
     }
 
     @Override
     public Decision canRemain(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        return shouldFilter(shardRouting, node, allocation) ? Decision.NO : Decision.YES;
+        return allowed(shardRouting, node, allocation);
     }
 
-    private boolean shouldFilter(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
-        if (clusterRequireFilters != null) {
-            if (!clusterRequireFilters.match(node.node())) {
-                return true;
-            }
+    private Decision allowed(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
+        boolean detailed = allocation.explanation().level().debugEnabled();
+        DiscoveryNodeFilters.Match match = null;
+
+        // only collect all the matching filters on a trace level
+        Decision.Multi yesDecision = null;
+        if (allocation.explanation().level().traceEnabled()) {
+            yesDecision = new Decision.Multi(NAME);
         }
-        if (clusterIncludeFilters != null) {
-            if (!clusterIncludeFilters.match(node.node())) {
-                return true;
-            }
-        }
+
+        boolean hasFilters = false;
+
         if (clusterExcludeFilters != null) {
-            if (clusterExcludeFilters.match(node.node())) {
-                return true;
+            hasFilters = true;
+            match = clusterExcludeFilters.match(node.node(), detailed);
+            if (match.matches()) {
+                return allocation.decisionDebug(NO, "filter (cluster exclude)", match.explanation(), match.explanationParams());
+            }
+            if (yesDecision != null) {
+                yesDecision.add(Decision.yes("cluster exclude filter", match.explanation(), match.explanationParams()));
+            }
+        }
+
+        if (clusterIncludeFilters != null) {
+            hasFilters = true;
+            match = clusterIncludeFilters.match(node.node(), detailed);
+            if (!match.matches()) {
+                return allocation.decisionDebug(NO, "filter (cluster include)", match.explanation(), match.explanationParams());
+            }
+            if (yesDecision != null) {
+                yesDecision.add(Decision.yes("cluster include filter", match.explanation(), match.explanationParams()));
+            }
+        }
+
+        if (clusterRequireFilters != null) {
+            hasFilters = true;
+            match = clusterRequireFilters.match(node.node(), detailed);
+            if (!match.matches()) {
+                return allocation.decisionDebug(NO, "filter (cluster required)", match.explanation(), match.explanationParams());
+            }
+            if (yesDecision != null) {
+                yesDecision.add(Decision.yes("cluster required filter", match.explanation(), match.explanationParams()));
             }
         }
 
         IndexMetaData indexMd = allocation.routingNodes().metaData().index(shardRouting.index());
-        if (indexMd.requireFilters() != null) {
-            if (!indexMd.requireFilters().match(node.node())) {
-                return true;
+        if (indexMd.excludeFilters() != null) {
+            hasFilters = true;
+            match = indexMd.excludeFilters().match(node.node(), detailed);
+            if (match.matches()) {
+                return allocation.decisionDebug(NO, "filter (index exclude)", match.explanation(), match.explanationParams());
+            }
+            if (yesDecision != null) {
+                yesDecision.add(Decision.yes("index exclude filter", match.explanation(), match.explanationParams()));
             }
         }
         if (indexMd.includeFilters() != null) {
-            if (!indexMd.includeFilters().match(node.node())) {
-                return true;
+            hasFilters = true;
+            match = indexMd.includeFilters().match(node.node(), detailed);
+            if (!match.matches()) {
+                return allocation.decisionDebug(NO, "filter (index include)", match.explanation(), match.explanationParams());
+            }
+            if (yesDecision != null) {
+                yesDecision.add(Decision.yes("index include filter", match.explanation(), match.explanationParams()));
             }
         }
-        if (indexMd.excludeFilters() != null) {
-            if (indexMd.excludeFilters().match(node.node())) {
-                return true;
+        if (indexMd.requireFilters() != null) {
+            hasFilters = true;
+            match = indexMd.requireFilters().match(node.node(), detailed);
+            if (!match.matches()) {
+                return allocation.decisionDebug(NO, "filter (index required)", match.explanation(), match.explanationParams());
+            }
+            if (yesDecision != null) {
+                yesDecision.add(Decision.yes("index required filter", match.explanation(), match.explanationParams()));
             }
         }
 
-        return false;
+        if (!hasFilters) {
+            return YES_NO_FILTERS;
+        }
+
+        if (yesDecision != null) {
+            return yesDecision;
+        }
+
+        return YES;
     }
 
     class ApplySettings implements NodeSettingsService.Listener {

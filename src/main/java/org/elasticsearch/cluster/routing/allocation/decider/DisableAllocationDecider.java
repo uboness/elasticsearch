@@ -54,32 +54,43 @@ import org.elasticsearch.node.settings.NodeSettingsService;
  */
 public class DisableAllocationDecider extends AllocationDecider {
 
+    private final static String NAME = "disable allocation";
+
+    private final static String DISABLE_NEW_KEY = "cluster.routing.allocation.disable_new_allocation";
+    private final static String DISABLE_KEY = "cluster.routing.allocation.disable_allocation";
+    private final static String DISABLE_REPLICA_KEY = "cluster.routing.allocation.disable_replica_allocation";
+
     static {
         MetaData.addDynamicSettings(
-                "cluster.routing.allocation.disable_new_allocation",
-                "cluster.routing.allocation.disable_allocation",
-                "cluster.routing.allocation.disable_replica_allocation"
+                DISABLE_NEW_KEY,
+                DISABLE_KEY,
+                DISABLE_REPLICA_KEY
         );
     }
+
+    private final static Decision YES = Decision.yes(NAME, "allocation is not disabled");
+    private final static Decision DISABLE_NEW_DECISION = Decision.no(NAME, "allocation of newly created shards is disabled ([%s] is set to [true])", DISABLE_NEW_KEY);
+    private final static Decision DISABLE_DECISION = Decision.no(NAME, "allocation is disabled ([%s] is set to [true]", DISABLE_KEY);
+    private final static Decision DISABLE_REPLICA_DECISION = Decision.no(NAME, "allocation of replicas is disabled ([%s] is set to [true]", DISABLE_REPLICA_KEY);
 
     class ApplySettings implements NodeSettingsService.Listener {
         @Override
         public void onRefreshSettings(Settings settings) {
-            boolean disableNewAllocation = settings.getAsBoolean("cluster.routing.allocation.disable_new_allocation", DisableAllocationDecider.this.disableNewAllocation);
+            boolean disableNewAllocation = settings.getAsBoolean(DISABLE_NEW_KEY, DisableAllocationDecider.this.disableNewAllocation);
             if (disableNewAllocation != DisableAllocationDecider.this.disableNewAllocation) {
-                logger.info("updating [cluster.routing.allocation.disable_new_allocation] from [{}] to [{}]", DisableAllocationDecider.this.disableNewAllocation, disableNewAllocation);
+                logger.info("updating [{}] from [{}] to [{}]", DISABLE_NEW_KEY, DisableAllocationDecider.this.disableNewAllocation, disableNewAllocation);
                 DisableAllocationDecider.this.disableNewAllocation = disableNewAllocation;
             }
 
-            boolean disableAllocation = settings.getAsBoolean("cluster.routing.allocation.disable_allocation", DisableAllocationDecider.this.disableAllocation);
+            boolean disableAllocation = settings.getAsBoolean(DISABLE_KEY, DisableAllocationDecider.this.disableAllocation);
             if (disableAllocation != DisableAllocationDecider.this.disableAllocation) {
-                logger.info("updating [cluster.routing.allocation.disable_allocation] from [{}] to [{}]", DisableAllocationDecider.this.disableAllocation, disableAllocation);
+                logger.info("updating [{}] from [{}] to [{}]", DISABLE_KEY, DisableAllocationDecider.this.disableAllocation, disableAllocation);
                 DisableAllocationDecider.this.disableAllocation = disableAllocation;
             }
 
-            boolean disableReplicaAllocation = settings.getAsBoolean("cluster.routing.allocation.disable_replica_allocation", DisableAllocationDecider.this.disableReplicaAllocation);
+            boolean disableReplicaAllocation = settings.getAsBoolean(DISABLE_REPLICA_KEY, DisableAllocationDecider.this.disableReplicaAllocation);
             if (disableReplicaAllocation != DisableAllocationDecider.this.disableReplicaAllocation) {
-                logger.info("updating [cluster.routing.allocation.disable_replica_allocation] from [{}] to [{}]", DisableAllocationDecider.this.disableReplicaAllocation, disableReplicaAllocation);
+                logger.info("updating [{}] from [{}] to [{}]", DISABLE_REPLICA_KEY, DisableAllocationDecider.this.disableReplicaAllocation, disableReplicaAllocation);
                 DisableAllocationDecider.this.disableReplicaAllocation = disableReplicaAllocation;
             }
         }
@@ -91,7 +102,7 @@ public class DisableAllocationDecider extends AllocationDecider {
 
     @Inject
     public DisableAllocationDecider(Settings settings, NodeSettingsService nodeSettingsService) {
-        super(settings);
+        super(NAME, settings);
         this.disableNewAllocation = settings.getAsBoolean("cluster.routing.allocation.disable_new_allocation", false);
         this.disableAllocation = settings.getAsBoolean("cluster.routing.allocation.disable_allocation", false);
         this.disableReplicaAllocation = settings.getAsBoolean("cluster.routing.allocation.disable_replica_allocation", false);
@@ -101,17 +112,23 @@ public class DisableAllocationDecider extends AllocationDecider {
 
     @Override
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
+        if (allocation.ignoreDisable()) {
+            return Decision.NOT_APPLICABLE;
+        }
         if (shardRouting.primary() && !allocation.routingNodes().routingTable().index(shardRouting.index()).shard(shardRouting.id()).primaryAllocatedPostApi()) {
             // if its primary, and it hasn't been allocated post API (meaning its a "fresh newly created shard"), only disable allocation
             // on a special disable allocation flag
-            return allocation.ignoreDisable() ? Decision.YES : disableNewAllocation ? Decision.NO : Decision.YES;
+            if (disableNewAllocation) {
+                return DISABLE_NEW_DECISION;
+            }
+            return YES;
         }
         if (disableAllocation) {
-            return allocation.ignoreDisable() ? Decision.YES : Decision.NO;
+            return DISABLE_DECISION;
         }
         if (disableReplicaAllocation) {
-            return shardRouting.primary() ? Decision.YES : allocation.ignoreDisable() ? Decision.YES : Decision.NO;
+            return DISABLE_REPLICA_DECISION;
         }
-        return Decision.YES;
+        return YES;
     }
 }

@@ -31,20 +31,25 @@ import org.elasticsearch.common.settings.Settings;
  */
 public class ReplicaAfterPrimaryActiveAllocationDecider extends AllocationDecider {
 
+    private final static String NAME = "replica after primary active";
+
+    private final static Decision NO = Decision.no(NAME, "the primary shard of the replica is not active");
+    private final static Decision YES = Decision.yes(NAME, "the primary shard of the replica is active");
+
     @Inject
     public ReplicaAfterPrimaryActiveAllocationDecider(Settings settings) {
-        super(settings);
+        super(NAME, settings);
     }
 
     @Override
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
         if (shardRouting.primary()) {
-            return Decision.YES;
+            return Decision.NOT_APPLICABLE;
         }
         MutableShardRouting primary = allocation.routingNodes().findPrimaryForReplica(shardRouting);
         if (primary == null || !primary.active()) {
-            return Decision.NO;
+            return NO;
         }
-        return Decision.YES;
+        return YES;
     }
 }

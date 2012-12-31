@@ -29,7 +29,7 @@ import org.elasticsearch.common.settings.Settings;
 import java.util.List;
 
 /**
- * An allocation decider that prevents the more than prevents multiple instances
+ * An allocation decider that prevents multiple instances
  * of the same shard to be allocated on a single <tt>host</tt>. The cluster setting can
  * be modified in real-time by updating the {@value #SAME_HOST_SETTING} value of
  * cluster setting API. The default is <code>false</code>.
@@ -41,13 +41,19 @@ import java.util.List;
  */
 public class SameShardAllocationDecider extends AllocationDecider {
 
+    private final static String NAME = "same shard";
+
     public static final String SAME_HOST_SETTING = "cluster.routing.allocation.same_shard.host";
+
+    private static final Decision NO = Decision.no(NAME, "");
+    private static final Decision YES = Decision.yes(NAME, "");
+    private static final Decision SAME_NODE_DECISION = Decision.no(NAME, "two shards of the same shard id cannot be allocated on the same node");
 
     private final boolean sameHost;
 
     @Inject
     public SameShardAllocationDecider(Settings settings) {
-        super(settings);
+        super(NAME, settings);
 
         this.sameHost = settings.getAsBoolean(SAME_HOST_SETTING, false);
     }
@@ -58,28 +64,35 @@ public class SameShardAllocationDecider extends AllocationDecider {
         for (int i = 0; i < shards.size(); i++) {
             // we do not allow for two shards of the same shard id to exists on the same node
             if (shards.get(i).shardId().equals(shardRouting.shardId())) {
-                return Decision.NO;
+                return SAME_NODE_DECISION;
             }
         }
-        if (sameHost) {
-            if (node.node() != null) {
-                for (RoutingNode checkNode : allocation.routingNodes()) {
-                    if (checkNode.node() == null) {
-                        continue;
-                    }
-                    // check if its on the same host as the one we want to allocate to
-                    if (!checkNode.node().address().sameHost(node.node().address())) {
-                        continue;
-                    }
-                    shards = checkNode.shards();
-                    for (int i = 0; i < shards.size(); i++) {
-                        if (shards.get(i).shardId().equals(shardRouting.shardId())) {
-                            return Decision.NO;
-                        }
+
+        if (!sameHost) {
+            return allocation.decisionTrace(YES, "no other shard with shard id [%s] is currently allocated on node [%s]", shardRouting.id(), node.nodeId());
+        }
+
+        if (node.node() != null) {
+            for (RoutingNode checkNode : allocation.routingNodes()) {
+                if (checkNode.node() == null) {
+                    continue;
+                }
+                // check if its on the same host as the one we want to allocate to
+                if (!checkNode.node().address().sameHost(node.node().address())) {
+                    continue;
+                }
+                shards = checkNode.shards();
+                for (int i = 0; i < shards.size(); i++) {
+                    ShardRouting shard = shards.get(i);
+                    if (shard.shardId().equals(shardRouting.shardId())) {
+                        return allocation.decisionDebug(NO, "there's already a shard with shard id [%s] assigned to the node [%s] host [%s] ([cluster.routing.allocation.same_shard.host] is set to [true])", shard.id(), node.nodeId(), node.node().address());
                     }
                 }
             }
+
+            return allocation.decisionTrace(YES, "no other shard with shard id [%s] is allocated on the same node [%s] or the same host [%s]", shardRouting.id(), node.nodeId(), node.node().address());
         }
-        return Decision.YES;
+
+        return allocation.decisionTrace(YES, "no other shard with shard id [%s] is allocated on the same node [%s]", shardRouting.id(), node.nodeId());
     }
 }

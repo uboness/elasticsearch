@@ -34,7 +34,47 @@ public class DiscoveryNodeFilters {
     public static enum OpType {
         AND,
         OR
-    };
+    }
+
+    public static class Match {
+
+        private final boolean matches;
+        private final String explanation;
+        private final Object[] explanationParams;
+
+        public final static Match YES = yes("");
+        public final static Match NO = no("");
+
+        private Match(boolean matches, String explanation, Object... explanationParams) {
+            this.matches = matches;
+            this.explanation = explanation;
+            this.explanationParams = explanationParams;
+        }
+
+        public static Match yes(String explanation, Object... explanationParams) {
+            return new Match(true, explanation, explanationParams);
+        }
+
+        public static Match no(String explanation, Object... explanationParams) {
+            return new Match(false, explanation, explanationParams);
+        }
+
+        public boolean matches() {
+            return matches;
+        }
+
+        public String explanation() {
+            return explanation;
+        }
+
+        public Object[] explanationParams() {
+            return explanationParams;
+        }
+
+        public String toString() {
+            return String.format(explanation, explanationParams);
+        }
+    }
 
     public static DiscoveryNodeFilters buildFromSettings(OpType opType, String prefix, Settings settings) {
         return buildFromKeyValue(opType, settings.getByPrefix(prefix).getAsMap());
@@ -63,14 +103,21 @@ public class DiscoveryNodeFilters {
         this.filters = filters;
     }
 
-    public boolean match(DiscoveryNode node) {
+    public Match match(DiscoveryNode node) {
+        return match(node, false);
+    }
+
+    public Match match(DiscoveryNode node, boolean detailed) {
         for (Map.Entry<String, String[]> entry : filters.entrySet()) {
             String attr = entry.getKey();
             String[] values = entry.getValue();
             if ("_ip".equals(attr)) {
                 if (!(node.address() instanceof InetSocketTransportAddress)) {
                     if (opType == OpType.AND) {
-                        return false;
+                        if (detailed) {
+                            return Match.no("node [%s[%s]] doesn't confirm to required _ip filters [%s] as it is not socket bound", node.id(), node.address(), Strings.arrayToCommaDelimitedString(values));
+                        }
+                        return Match.NO;
                     } else {
                         continue;
                     }
@@ -79,18 +126,27 @@ public class DiscoveryNodeFilters {
                 for (String value : values) {
                     if (Regex.simpleMatch(value, inetAddress.address().getAddress().getHostAddress())) {
                         if (opType == OpType.OR) {
-                            return true;
+                            if (detailed) {
+                                return Match.yes("node [%s[%s]] confirms to one of the _ip filters [%s]", node.id(), inetAddress.address().getAddress().getHostAddress(), value);
+                            }
+                            return Match.YES;
                         }
                     } else {
                         if (opType == OpType.AND) {
-                            return false;
+                            if (detailed) {
+                                return Match.no("node [%s[%s]] doesn't confirm to the required _ip filter [%s]", node.id(), inetAddress.address().getAddress().getHostAddress(), value);
+                            }
+                            return Match.NO;
                         }
                     }
                 }
             } else if ("_host".equals(attr)) {
                 if (!(node.address() instanceof InetSocketTransportAddress)) {
                     if (opType == OpType.AND) {
-                        return false;
+                        if (detailed) {
+                            return Match.no("node [%s[%s]] doesn't confirm to required _host filters [%s] as it is not socket bound", node.id(), node.address(), Strings.arrayToCommaDelimitedString(values));
+                        }
+                        return Match.NO;
                     } else {
                         continue;
                     }
@@ -99,20 +155,32 @@ public class DiscoveryNodeFilters {
                 for (String value : values) {
                     if (Regex.simpleMatch(value, inetAddress.address().getHostName())) {
                         if (opType == OpType.OR) {
-                            return true;
+                            if (detailed) {
+                                return Match.yes("node [%s[%s]] confirms to one of the _host filters [%s]", node.id(), inetAddress.address().getHostName(), value);
+                            }
+                            return Match.YES;
                         }
                     } else {
                         if (opType == OpType.AND) {
-                            return false;
+                            if (detailed) {
+                                return Match.no("node [%s[%s]] doesn't confirm to the required _host filter [%s]", node.id(), inetAddress.address().getHostName(), value);
+                            }
+                            return Match.NO;
                         }
                     }
                     if (Regex.simpleMatch(value, inetAddress.address().getAddress().getHostAddress())) {
                         if (opType == OpType.OR) {
-                            return true;
+                            if (detailed) {
+                                return Match.yes("node [%s[%s]] confirms to one of the _host filters [%s]", node.id(), inetAddress.address().getAddress().getHostAddress(), value);
+                            }
+                            return Match.YES;
                         }
                     } else {
                         if (opType == OpType.AND) {
-                            return false;
+                            if (detailed) {
+                                return Match.no("node [%s[%s]] doesn't confirm to the required _host filter [%s]", node.id(), inetAddress.address().getAddress().getHostAddress(), value);
+                            }
+                            return Match.NO;
                         }
                     }
                 }
@@ -120,11 +188,17 @@ public class DiscoveryNodeFilters {
                 for (String value : values) {
                     if (node.id().equals(value)) {
                         if (opType == OpType.OR) {
-                            return true;
+                            if (detailed) {
+                                return Match.yes("node [%s] matches one of the _id filters [%s]", node.id(), value);
+                            }
+                            return Match.YES;
                         }
                     } else {
                         if (opType == OpType.AND) {
-                            return false;
+                            if (detailed) {
+                                return Match.no("node [%s] doesn't match a required _id filter [%s]", node.id(), value);
+                            }
+                            return Match.NO;
                         }
                     }
                 }
@@ -132,11 +206,17 @@ public class DiscoveryNodeFilters {
                 for (String value : values) {
                     if (Regex.simpleMatch(value, node.name())) {
                         if (opType == OpType.OR) {
-                            return true;
+                            if (detailed) {
+                                return Match.yes("node [%s[%s]] matches one of the _name filters [%s]", node.id(), node.name(), value);
+                            }
+                            return Match.YES;
                         }
                     } else {
                         if (opType == OpType.AND) {
-                            return false;
+                            if (detailed) {
+                                return Match.yes("node [%s[%s]] doesn't match a required _name filters [%s]", node.id(), node.name(), value);
+                            }
+                            return Match.YES;
                         }
                     }
                 }
@@ -144,7 +224,10 @@ public class DiscoveryNodeFilters {
                 String nodeAttributeValue = node.attributes().get(attr);
                 if (nodeAttributeValue == null) {
                     if (opType == OpType.AND) {
-                        return false;
+                        if (detailed) {
+                            return Match.no("node [%s%s] doesn't have a required metadata attribute [%s]", node.id(), node.attributes(), attr);
+                        }
+                        return Match.NO;
                     } else {
                         continue;
                     }
@@ -152,20 +235,33 @@ public class DiscoveryNodeFilters {
                 for (String value : values) {
                     if (Regex.simpleMatch(value, nodeAttributeValue)) {
                         if (opType == OpType.OR) {
-                            return true;
+                            if (detailed) {
+                                return Match.yes("node [%s%s] matches one of the metadata attributes filters - [\"%s:%s\"]", node.id(), node.attributes(), attr, value);
+                            }
+                            return Match.YES;
                         }
                     } else {
                         if (opType == OpType.AND) {
-                            return false;
+                            if (detailed) {
+                                return Match.no("node [%s%s] doesn't match a required metadata attribute filter [\"%s:%s\"]", node.id(), node.attributes(), attr, value);
+                            }
+                            return Match.NO;
                         }
                     }
                 }
             }
         }
         if (opType == OpType.OR) {
-            return false;
-        } else {
-            return true;
+            if (detailed) {
+                return Match.no("node [%s%s] doesn't match any of the filters [%s]", node.id(), node.attributes(), Strings.mapToCommaDelimitedString(filters, "\"", "\"", "", "", ":", ","));
+            }
+            return Match.NO;
         }
+
+        if (detailed) {
+            return Match.yes("node [%s%s] matched all filters [%s]", node.id(), node.attributes(), Strings.mapToCommaDelimitedString(filters, "\"", "\"", "", "", ":", ","));
+        }
+
+        return Match.YES;
     }
 }

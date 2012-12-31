@@ -22,6 +22,7 @@ package org.elasticsearch.cluster.routing.allocation.decider;
 import com.google.common.collect.ImmutableSet;
 import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.ShardRouting;
+import org.elasticsearch.cluster.routing.allocation.AllocationExplanation;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
@@ -35,7 +36,9 @@ import java.util.Set;
  */
 public class AllocationDeciders extends AllocationDecider {
 
-    private final AllocationDecider[] allocations;
+    private final static String NAME = "allocation deciders";
+
+    private final AllocationDecider[] deciders;
 
     /**
      * Create a new {@link AllocationDeciders} instance
@@ -59,52 +62,74 @@ public class AllocationDeciders extends AllocationDecider {
     }
 
     @Inject
-    public AllocationDeciders(Settings settings, Set<AllocationDecider> allocations) {
-        super(settings);
-        this.allocations = allocations.toArray(new AllocationDecider[allocations.size()]);
+    public AllocationDeciders(Settings settings, Set<AllocationDecider> deciders) {
+        super(NAME, settings);
+        this.deciders = deciders.toArray(new AllocationDecider[deciders.size()]);
     }
 
     @Override
     public Decision canRebalance(ShardRouting shardRouting, RoutingAllocation allocation) {
-        Decision.Multi ret = new Decision.Multi();
-        for (AllocationDecider allocationDecider : allocations) {
+        Decision.Multi ret = new Decision.Multi(NAME);
+        for (AllocationDecider allocationDecider : deciders) {
             Decision decision = allocationDecider.canRebalance(shardRouting, allocation);
-            if (decision != Decision.ALWAYS) {
+            if (decision != Decision.NOT_APPLICABLE) {
                 ret.add(decision);
             }
+
+            // we can shortcut here if the decision is no
+            if (decision.type() == Decision.Type.NO) {
+                allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation("rebalance", Decision.NO));
+                return ret;
+            }
         }
+        allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation("rebalance", ret));
         return ret;
     }
 
     @Override
     public Decision canAllocate(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
         if (allocation.shouldIgnoreShardForNode(shardRouting.shardId(), node.nodeId())) {
+            allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation(node.node(), "allocate", Decision.NO));
             return Decision.NO;
         }
-        Decision.Multi ret = new Decision.Multi();
-        for (AllocationDecider allocationDecider : allocations) {
+        Decision.Multi ret = new Decision.Multi(NAME);
+        for (AllocationDecider allocationDecider : deciders) {
             Decision decision = allocationDecider.canAllocate(shardRouting, node, allocation);
-            // the assumption is that a decider that returns the static instance Decision#ALWAYS
+            // the assumption is that a decider that returns the static instance Decision#NOT_APPLICABLE
             // does not really implements canAllocate
-            if (decision != Decision.ALWAYS) {
+            if (decision != Decision.NOT_APPLICABLE) {
                 ret.add(decision);
             }
+
+            // we can shortcut here if the decision is no
+            if (decision.type() == Decision.Type.NO) {
+                allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation(node.node(), "allocate", ret));
+                return ret;
+            }
         }
+        allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation(node.node(), "allocate", ret));
         return ret;
     }
 
     @Override
     public Decision canRemain(ShardRouting shardRouting, RoutingNode node, RoutingAllocation allocation) {
         if (allocation.shouldIgnoreShardForNode(shardRouting.shardId(), node.nodeId())) {
+            allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation(node.node(), "remain", Decision.NO));
             return Decision.NO;
         }
-        Decision.Multi ret = new Decision.Multi();
-        for (AllocationDecider allocationDecider : allocations) {
+        Decision.Multi ret = new Decision.Multi(NAME);
+        for (AllocationDecider allocationDecider : deciders) {
             Decision decision = allocationDecider.canRemain(shardRouting, node, allocation);
-            if (decision != Decision.ALWAYS) {
+            if (decision != Decision.NOT_APPLICABLE) {
                 ret.add(decision);
             }
+            // we can shortcut here if the decision is no
+            if (decision.type() == Decision.Type.NO) {
+                allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation(node.node(), "remain", ret));
+                return ret;
+            }
         }
+        allocation.explanation().add(shardRouting.shardId(), new AllocationExplanation.Explanation(node.node(), "remain", ret));
         return ret;
     }
 }

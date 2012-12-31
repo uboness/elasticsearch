@@ -30,7 +30,7 @@ import java.util.List;
 
 /**
  * This {@link AllocationDecider} controls re-balancing operations based on the
- * cluster wide active shard state. This decided can not be configured in
+ * cluster wide active shard state. This decider can not be configured in
  * real-time and should be pre-cluster start via
  * <tt>cluster.routing.allocation.allow_rebalance</tt>. This setting respects the following
  * values:
@@ -42,10 +42,12 @@ import java.util.List;
  * shards on all indices are active.</li>
  * 
  * <li><tt>always</tt> - Re-balancing is allowed once a shard replication group
- * is active</li>
+ * is active (that is, at least on shard of one index is active)</li>
  * </ul>
  */
 public class ClusterRebalanceAllocationDecider extends AllocationDecider {
+
+    private final static String NAME = "allow rebalance";
 
     /**
      * An enum representation for the configured re-balance type. 
@@ -65,11 +67,18 @@ public class ClusterRebalanceAllocationDecider extends AllocationDecider {
         INDICES_ALL_ACTIVE
     }
 
+
+    private final static Decision NO = Decision.no(NAME, "");
+    private final static Decision ALWAYS_YES_DECISION = Decision.yes(NAME, "[cluster.routing.allocation.allow_rebalance] is set to [always]");
+    private final static Decision INDICES_PRIMARIES_ACTIVE_YES_DECISION = Decision.yes(NAME, "[cluster.routing.allocation.allow_rebalance] is set to [indices_all_active] and all primary shards are active");
+    private final static Decision INDICES_ALL_ACTIVE_YES_DECISION = Decision.yes(NAME, "[cluster.routing.allocation.allow_rebalance] is set to [indices_all_active] and all shards are active");
+
+
     private final ClusterRebalanceType type;
 
     @Inject
     public ClusterRebalanceAllocationDecider(Settings settings) {
-        super(settings);
+        super(NAME, settings);
         String allowRebalance = settings.get("cluster.routing.allocation.allow_rebalance", "indices_all_active");
         if ("always".equalsIgnoreCase(allowRebalance)) {
             type = ClusterRebalanceType.ALWAYS;
@@ -89,7 +98,7 @@ public class ClusterRebalanceAllocationDecider extends AllocationDecider {
         if (type == ClusterRebalanceType.INDICES_PRIMARIES_ACTIVE) {
             for (MutableShardRouting shard : allocation.routingNodes().unassigned()) {
                 if (shard.primary()) {
-                    return Decision.NO;
+                    return allocation.decisionDebug(NO, "[cluster.routing.allocation.allow_rebalance] is set to [indices_all_active] and primary shard %s is unassigned", shard.shardId());
                 }
             }
             for (RoutingNode node : allocation.routingNodes()) {
@@ -97,27 +106,30 @@ public class ClusterRebalanceAllocationDecider extends AllocationDecider {
                 for (int i = 0; i < shards.size(); i++) {
                     MutableShardRouting shard = shards.get(i);
                     if (shard.primary() && !shard.active() && shard.relocatingNodeId() == null) {
-                        return Decision.NO;
+                        return allocation.decisionDebug(NO, "[cluster.routing.allocation.allow_rebalance] is set to [indices_all_active] and primary shard %s is not active", shard.shardId());
                     }
                 }
             }
-            return Decision.YES;
+            return INDICES_PRIMARIES_ACTIVE_YES_DECISION;
         }
+
         if (type == ClusterRebalanceType.INDICES_ALL_ACTIVE) {
             if (!allocation.routingNodes().unassigned().isEmpty()) {
-                return Decision.NO;
+                return allocation.decisionDebug(NO, "[cluster.routing.allocation.allow_rebalance] is set to [indices_all_active] and not all shards are assigned");
             }
             for (RoutingNode node : allocation.routingNodes()) {
                 List<MutableShardRouting> shards = node.shards();
                 for (int i = 0; i < shards.size(); i++) {
                     MutableShardRouting shard = shards.get(i);
                     if (!shard.active() && shard.relocatingNodeId() == null) {
-                        return Decision.NO;
+                        return allocation.decisionDebug(NO, "[cluster.routing.allocation.allow_rebalance] is set to [indices_all_active] and shard %s is not active", shard.shardId());
                     }
                 }
             }
+            return INDICES_ALL_ACTIVE_YES_DECISION;
         }
+
         // type == Type.ALWAYS
-        return Decision.YES;
+        return ALWAYS_YES_DECISION;
     }
 }

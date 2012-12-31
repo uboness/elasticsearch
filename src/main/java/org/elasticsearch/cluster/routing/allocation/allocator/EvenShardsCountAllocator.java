@@ -24,11 +24,13 @@ import org.elasticsearch.cluster.routing.MutableShardRouting;
 import org.elasticsearch.cluster.routing.RoutingNode;
 import org.elasticsearch.cluster.routing.RoutingNodes;
 import org.elasticsearch.cluster.routing.ShardRouting;
+import org.elasticsearch.cluster.routing.allocation.AllocationExplanation;
 import org.elasticsearch.cluster.routing.allocation.FailedRerouteAllocation;
 import org.elasticsearch.cluster.routing.allocation.RoutingAllocation;
 import org.elasticsearch.cluster.routing.allocation.StartedRerouteAllocation;
 import org.elasticsearch.cluster.routing.allocation.decider.AllocationDecider;
 import org.elasticsearch.cluster.routing.allocation.decider.Decision;
+import org.elasticsearch.common.Strings;
 import org.elasticsearch.common.component.AbstractComponent;
 import org.elasticsearch.common.inject.Inject;
 import org.elasticsearch.common.settings.Settings;
@@ -119,7 +121,13 @@ public class EvenShardsCountAllocator extends AbstractComponent implements Shard
         for (Iterator<MutableShardRouting> it = routingNodes.unassigned().iterator(); it.hasNext(); ) {
             MutableShardRouting shard = it.next();
             // go over the nodes and try and allocate the remaining ones
-            for (RoutingNode routingNode : sortedNodesLeastToHigh(allocation)) {
+            RoutingNode[] remainingNodes = sortedNodesLeastToHigh(allocation);
+
+            if (logger.isDebugEnabled()) {
+                logger.debug("Trying to allocate unassigned shard {} to nodes in the following order: [{}]", shard.shardId(), Strings.arrayToCommaDelimitedString(remainingNodes, RoutingNode.TO_NODE_ID_FUNCTION));
+            }
+
+            for (RoutingNode routingNode : remainingNodes) {
                 Decision decision = allocation.deciders().canAllocate(shard, routingNode, allocation);
                 if (decision.type() == Decision.Type.YES) {
                     changed = true;
@@ -129,6 +137,7 @@ public class EvenShardsCountAllocator extends AbstractComponent implements Shard
                 }
             }
         }
+
         return changed;
     }
 
@@ -242,4 +251,5 @@ public class EvenShardsCountAllocator extends AbstractComponent implements Shard
         });
         return nodes;
     }
+
 }

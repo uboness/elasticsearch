@@ -83,7 +83,6 @@ public class TransportClusterStateAction extends TransportMasterNodeOperationAct
         }
         if (!request.filterRoutingTable()) {
             builder.routingTable(currentState.routingTable());
-            builder.allocationExplanation(currentState.allocationExplanation());
         }
         if (!request.filterBlocks()) {
             builder.blocks(currentState.blocks());
