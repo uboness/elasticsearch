@@ -22,10 +22,8 @@ package org.elasticsearch.search.facet.range;
 import org.apache.lucene.index.AtomicReaderContext;
 import org.elasticsearch.index.fielddata.DoubleValues;
 import org.elasticsearch.index.fielddata.IndexNumericFieldData;
-import org.elasticsearch.search.facet.DoubleFacetAggregatorBase;
 import org.elasticsearch.search.facet.FacetExecutor;
 import org.elasticsearch.search.facet.InternalFacet;
-import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
 
@@ -39,7 +37,10 @@ public class KeyValueRangeFacetExecutor extends FacetExecutor {
 
     private final RangeFacet.Entry[] entries;
 
-    public KeyValueRangeFacetExecutor(IndexNumericFieldData keyIndexFieldData, IndexNumericFieldData valueIndexFieldData, RangeFacet.Entry[] entries, SearchContext context) {
+    private long missing;
+    private long other;
+
+    public KeyValueRangeFacetExecutor(IndexNumericFieldData keyIndexFieldData, IndexNumericFieldData valueIndexFieldData, RangeFacet.Entry[] entries) {
         this.entries = entries;
         this.keyIndexFieldData = keyIndexFieldData;
         this.valueIndexFieldData = valueIndexFieldData;
@@ -52,7 +53,7 @@ public class KeyValueRangeFacetExecutor extends FacetExecutor {
 
     @Override
     public InternalFacet buildFacet(String facetName) {
-        return new InternalRangeFacet(facetName, entries);
+        return new InternalRangeFacet(facetName, entries, missing, other);
     }
 
     class Collector extends FacetExecutor.Collector {
@@ -72,60 +73,82 @@ public class KeyValueRangeFacetExecutor extends FacetExecutor {
 
         @Override
         public void collect(int doc) throws IOException {
-            for (RangeFacet.Entry entry : entries) {
-                entry.foundInDoc = false;
-            }
             rangeProc.onDoc(doc, keyValues);
         }
 
         @Override
         public void postCollection() {
+            KeyValueRangeFacetExecutor.this.missing = rangeProc.missing;
+            KeyValueRangeFacetExecutor.this.other = rangeProc.other;
         }
     }
 
-    public static class RangeProc extends DoubleFacetAggregatorBase {
+    public static class RangeProc {
 
         private final RangeFacet.Entry[] entries;
 
         DoubleValues valueValues;
 
+        long missing;
+        long other;
+
         public RangeProc(RangeFacet.Entry[] entries) {
             this.entries = entries;
         }
 
-        @Override
-        public void onValue(int docId, double value) {
+        public void onDoc(int docId, DoubleValues keyValues) {
+
+            if (!keyValues.hasValue(docId)) {
+                missing++;
+                return;
+            }
+
+            boolean docMatched = false;
             for (RangeFacet.Entry entry : entries) {
-                if (entry.foundInDoc) {
-                    continue;
-                }
-                if (value >= entry.getFrom() && value < entry.getTo()) {
-                    entry.foundInDoc = true;
-                    entry.count++;
-                    if (valueValues.isMultiValued()) {
-                        for (DoubleValues.Iter iter = valueValues.getIter(docId); iter.hasNext(); ) {
-                            double valueValue = iter.next();
-                            entry.total += valueValue;
-                            if (valueValue < entry.min) {
-                                entry.min = valueValue;
+                for (DoubleValues.Iter keys = keyValues.getIter(docId); keys.hasNext();) {
+                    double key = keys.next();
+                    if (key >= entry.getFrom() && key < entry.getTo()) {
+                        docMatched = true;
+                        entry.count++;
+                        if (valueValues.isMultiValued()) {
+                            boolean hasValue = false;
+                            for (DoubleValues.Iter values = valueValues.getIter(docId); values.hasNext(); ) {
+                                hasValue = true;
+                                double value = values.next();
+                                entry.totalCount++;
+                                entry.total += value;
+                                if (value < entry.min) {
+                                    entry.min = value;
+                                }
+                                if (value > entry.max) {
+                                    entry.max = value;
+                                }
                             }
-                            if (valueValue > entry.max) {
-                                entry.max = valueValue;
+                            if (!hasValue) {
+                                entry.missing++;
                             }
+                        } else if (valueValues.hasValue(docId)) {
+                            double value = valueValues.getValue(docId);
                             entry.totalCount++;
+                            entry.total += value;
+                            if (value < entry.min) {
+                                entry.min = value;
+                            }
+                            if (value > entry.max) {
+                                entry.max = value;
+                            }
+                        } else {
+                            entry.missing++;
                         }
-                    } else if (valueValues.hasValue(docId)) {
-                        double valueValue = valueValues.getValue(docId);
-                        entry.totalCount++;
-                        entry.total += valueValue;
-                        if (valueValue < entry.min) {
-                            entry.min = valueValue;
-                        }
-                        if (valueValue > entry.max) {
-                            entry.max = valueValue;
-                        }
+
+                        // we only need to calculate the stats for a single key that is the range of the entry
+                        break;
                     }
                 }
+            }
+
+            if (!docMatched) {
+                other++;
             }
         }
     }

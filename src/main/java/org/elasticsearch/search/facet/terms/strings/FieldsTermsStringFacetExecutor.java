@@ -28,7 +28,6 @@ import org.elasticsearch.index.fielddata.IndexFieldData;
 import org.elasticsearch.index.mapper.FieldMapper;
 import org.elasticsearch.script.SearchScript;
 import org.elasticsearch.search.facet.FacetExecutor;
-import org.elasticsearch.search.facet.FacetPhaseExecutionException;
 import org.elasticsearch.search.facet.InternalFacet;
 import org.elasticsearch.search.internal.SearchContext;
 
@@ -56,10 +55,7 @@ public class FieldsTermsStringFacetExecutor extends FacetExecutor {
         this.indexFieldDatas = new IndexFieldData[fieldsNames.length];
         for (int i = 0; i < fieldsNames.length; i++) {
             FieldMapper mapper = context.smartNameFieldMapper(fieldsNames[i]);
-            if (mapper == null) {
-                throw new FacetPhaseExecutionException(facetName, "failed to find mapping for [" + fieldsNames[i] + "]");
-            }
-            indexFieldDatas[i] = context.fieldData().getForField(mapper);
+            indexFieldDatas[i] = mapper == null ? null : context.fieldData().getForField(mapper);
         }
         if (excluded.isEmpty() && pattern == null && script == null) {
             aggregator = new HashedAggregator();
@@ -69,7 +65,9 @@ public class FieldsTermsStringFacetExecutor extends FacetExecutor {
 
         if (allTerms) {
             for (int i = 0; i < fieldsNames.length; i++) {
-                TermsStringFacetExecutor.loadAllTerms(context, indexFieldDatas[i], aggregator);
+                if (indexFieldDatas[i] != null) {
+                    TermsStringFacetExecutor.loadAllTerms(context, indexFieldDatas[i], aggregator);
+                }
             }
         }
     }
@@ -109,7 +107,7 @@ public class FieldsTermsStringFacetExecutor extends FacetExecutor {
         @Override
         public void setNextReader(AtomicReaderContext context) throws IOException {
             for (int i = 0; i < indexFieldDatas.length; i++) {
-                values[i] = indexFieldDatas[i].load(context).getBytesValues();
+                values[i] = (indexFieldDatas[i] == null) ? BytesValues.EMPTY : indexFieldDatas[i].load(context).getBytesValues();
             }
             if (script != null) {
                 script.setNextReader(context);

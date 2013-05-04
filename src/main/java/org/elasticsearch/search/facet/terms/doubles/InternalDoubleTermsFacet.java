@@ -22,6 +22,7 @@ package org.elasticsearch.search.facet.terms.doubles;
 import com.google.common.collect.ImmutableList;
 import gnu.trove.iterator.TDoubleIntIterator;
 import gnu.trove.map.hash.TDoubleIntHashMap;
+import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.common.CacheRecycler;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.bytes.HashedBytesArray;
@@ -35,6 +36,7 @@ import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.search.facet.Facet;
 import org.elasticsearch.search.facet.terms.InternalTermsFacet;
 import org.elasticsearch.search.facet.terms.TermsFacet;
+import org.elasticsearch.search.facet.terms.missing.InternalMissingFieldFacet;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -162,12 +164,24 @@ public class InternalDoubleTermsFacet extends InternalTermsFacet {
         if (facets.size() == 1) {
             return facets.get(0);
         }
-        InternalDoubleTermsFacet first = (InternalDoubleTermsFacet) facets.get(0);
+//        InternalDoubleTermsFacet first = findFirstFacetOfType(facets, InternalDoubleTermsFacet.class);
+        InternalDoubleTermsFacet first = null;
         TDoubleIntHashMap aggregated = CacheRecycler.popDoubleIntMap();
         long missing = 0;
         long total = 0;
         for (Facet facet : facets) {
+            if (facet instanceof InternalMissingFieldFacet) {
+                missing += ((InternalMissingFieldFacet) facet).getMissingCount();
+                continue;
+            }
+            if (!(facet instanceof InternalDoubleTermsFacet)) {
+                throw new ElasticSearchException("Incompatible field data type for terms facet [" + getName() + "] across shards " +
+                        "(most likely caused by an attempt to search across indices with different mappings for the same field)");
+            }
             InternalDoubleTermsFacet mFacet = (InternalDoubleTermsFacet) facet;
+            if (first == null) {
+                first = mFacet;
+            }
             missing += mFacet.getMissingCount();
             total += mFacet.getTotalCount();
             for (DoubleEntry entry : mFacet.entries) {

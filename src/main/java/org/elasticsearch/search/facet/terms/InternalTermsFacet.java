@@ -19,10 +19,14 @@
 
 package org.elasticsearch.search.facet.terms;
 
+import org.elasticsearch.search.facet.Facet;
 import org.elasticsearch.search.facet.InternalFacet;
 import org.elasticsearch.search.facet.terms.doubles.InternalDoubleTermsFacet;
 import org.elasticsearch.search.facet.terms.longs.InternalLongTermsFacet;
+import org.elasticsearch.search.facet.terms.missing.InternalMissingFieldFacet;
 import org.elasticsearch.search.facet.terms.strings.InternalStringTermsFacet;
+
+import java.util.List;
 
 /**
  *
@@ -33,6 +37,7 @@ public abstract class InternalTermsFacet extends InternalFacet implements TermsF
         InternalStringTermsFacet.registerStream();
         InternalLongTermsFacet.registerStream();
         InternalDoubleTermsFacet.registerStream();
+        InternalMissingFieldFacet.registerStream();
     }
 
     protected InternalTermsFacet() {
@@ -46,4 +51,5 @@ public abstract class InternalTermsFacet extends InternalFacet implements TermsF
     public final String getType() {
         return TYPE;
     }
+
 }

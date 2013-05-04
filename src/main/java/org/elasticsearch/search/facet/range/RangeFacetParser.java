@@ -139,30 +139,32 @@ public class RangeFacetParser extends AbstractComponent implements FacetParser {
 
         // we have a keyField
         FieldMapper keyFieldMapper = context.smartNameFieldMapper(keyField);
-        if (keyFieldMapper == null) {
-            throw new FacetPhaseExecutionException(facetName, "No mapping found for key_field [" + keyField + "]");
-        }
+
         for (RangeFacet.Entry entry : rangeEntries) {
             if (entry.fromAsString != null) {
-                entry.from = ((Number) keyFieldMapper.value(entry.fromAsString)).doubleValue();
+                entry.from = keyFieldMapper != null ? ((Number) keyFieldMapper.value(entry.fromAsString)).doubleValue() : Double.parseDouble(entry.fromAsString);
             }
             if (entry.toAsString != null) {
-                entry.to = ((Number) keyFieldMapper.value(entry.toAsString)).doubleValue();
+                entry.to = keyFieldMapper != null ? ((Number) keyFieldMapper.value(entry.toAsString)).doubleValue() : Double.parseDouble(entry.toAsString);
             }
+        }
+
+        if (keyFieldMapper == null) {
+            return new MissingKeyFieldMappingRangeFacetExecutor(rangeEntries);
         }
 
         IndexNumericFieldData keyIndexFieldData = context.fieldData().getForField(keyFieldMapper);
 
         if (valueField == null || keyField.equals(valueField)) {
-            return new RangeFacetExecutor(keyIndexFieldData, rangeEntries, context);
+            return new RangeFacetExecutor(keyIndexFieldData, rangeEntries);
         } else {
             FieldMapper valueFieldMapper = context.smartNameFieldMapper(valueField);
             if (valueFieldMapper == null) {
-                throw new FacetPhaseExecutionException(facetName, "No mapping found for value_field [" + keyField + "]");
+                return new MissingValueFieldMappingRangeFacetExecutor(keyIndexFieldData, rangeEntries);
             }
             IndexNumericFieldData valueIndexFieldData = context.fieldData().getForField(valueFieldMapper);
             // we have a value field, and its different than the key
-            return new KeyValueRangeFacetExecutor(keyIndexFieldData, valueIndexFieldData, rangeEntries, context);
+            return new KeyValueRangeFacetExecutor(keyIndexFieldData, valueIndexFieldData, rangeEntries);
         }
     }
 }

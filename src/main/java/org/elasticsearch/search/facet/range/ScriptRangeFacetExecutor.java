@@ -52,7 +52,7 @@ public class ScriptRangeFacetExecutor extends FacetExecutor {
 
     @Override
     public InternalFacet buildFacet(String facetName) {
-        return new InternalRangeFacet(facetName, entries);
+        return new InternalRangeFacet(facetName, entries, 0, 0);
     }
 
     class Collector extends FacetExecutor.Collector {
