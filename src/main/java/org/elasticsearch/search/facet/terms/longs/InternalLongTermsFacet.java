@@ -22,6 +22,7 @@ package org.elasticsearch.search.facet.terms.longs;
 import com.google.common.collect.ImmutableList;
 import gnu.trove.iterator.TLongIntIterator;
 import gnu.trove.map.hash.TLongIntHashMap;
+import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.common.CacheRecycler;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.bytes.HashedBytesArray;
@@ -35,6 +36,7 @@ import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.search.facet.Facet;
 import org.elasticsearch.search.facet.terms.InternalTermsFacet;
 import org.elasticsearch.search.facet.terms.TermsFacet;
+import org.elasticsearch.search.facet.terms.missing.InternalMissingFieldFacet;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -163,12 +165,23 @@ public class InternalLongTermsFacet extends InternalTermsFacet {
         if (facets.size() == 1) {
             return facets.get(0);
         }
-        InternalLongTermsFacet first = (InternalLongTermsFacet) facets.get(0);
+        InternalLongTermsFacet first = null;
         TLongIntHashMap aggregated = CacheRecycler.popLongIntMap();
         long missing = 0;
         long total = 0;
         for (Facet facet : facets) {
+            if (facet instanceof InternalMissingFieldFacet) {
+                missing += ((InternalMissingFieldFacet) facet).getMissingCount();
+                continue;
+            }
+            if (!(facet instanceof InternalLongTermsFacet)) {
+                throw new ElasticSearchException("Incompatible field data type for terms facet [" + getName() + "] across shards " +
+                        "(most likely caused by an attempt to search across indices with different mappings for the same field)");
+            }
             InternalLongTermsFacet mFacet = (InternalLongTermsFacet) facet;
+            if (first == null) {
+                first = mFacet;
+            }
             missing += mFacet.getMissingCount();
             total += mFacet.getTotalCount();
             for (LongEntry entry : mFacet.entries) {

@@ -23,6 +23,8 @@ import com.google.common.collect.ImmutableList;
 import gnu.trove.iterator.TObjectIntIterator;
 import gnu.trove.map.hash.TObjectIntHashMap;
 import org.apache.lucene.util.BytesRef;
+import org.elasticsearch.ElasticSearchException;
+import org.elasticsearch.bootstrap.ElasticSearch;
 import org.elasticsearch.common.CacheRecycler;
 import org.elasticsearch.common.bytes.BytesArray;
 import org.elasticsearch.common.bytes.BytesReference;
@@ -38,6 +40,7 @@ import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.search.facet.Facet;
 import org.elasticsearch.search.facet.terms.InternalTermsFacet;
 import org.elasticsearch.search.facet.terms.TermsFacet;
+import org.elasticsearch.search.facet.terms.missing.InternalMissingFieldFacet;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -172,12 +175,24 @@ public class InternalStringTermsFacet extends InternalTermsFacet {
         if (facets.size() == 1) {
             return facets.get(0);
         }
-        InternalStringTermsFacet first = (InternalStringTermsFacet) facets.get(0);
+//        InternalStringTermsFacet first = findFirstFacetOfType(facets, InternalStringTermsFacet.class);
+        InternalStringTermsFacet first = null;
         TObjectIntHashMap<Text> aggregated = CacheRecycler.popObjectIntMap();
         long missing = 0;
         long total = 0;
         for (Facet facet : facets) {
+            if (facet instanceof InternalMissingFieldFacet) {
+                missing += ((InternalMissingFieldFacet) facet).getMissingCount();
+                continue;
+            }
+            if (!(facet instanceof InternalStringTermsFacet)) {
+                throw new ElasticSearchException("Incompatible field data type for terms facet [" + getName() + "] across shards " +
+                        "(most likely caused by an attempt to search across indices with different mappings for the same field)");
+            }
             InternalStringTermsFacet mFacet = (InternalStringTermsFacet) facet;
+            if (first == null) {
+                first = mFacet;
+            }
             missing += mFacet.getMissingCount();
             total += mFacet.getTotalCount();
             for (TermEntry entry : mFacet.entries) {
