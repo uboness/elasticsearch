@@ -47,13 +47,9 @@ public interface RangeFacet extends Facet, Iterable<RangeFacet.Entry> {
         long count;
         long totalCount;
         double total;
+        long missing;
         double min = Double.POSITIVE_INFINITY;
         double max = Double.NEGATIVE_INFINITY;
-
-        /**
-         * Internal field used in facet collection
-         */
-        boolean foundInDoc;
 
         Entry() {
         }

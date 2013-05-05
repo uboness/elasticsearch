@@ -57,13 +57,17 @@ public class InternalRangeFacet extends InternalFacet implements RangeFacet {
     }
 
     Entry[] entries;
+    long missing;
+    long other;
 
     InternalRangeFacet() {
     }
 
-    public InternalRangeFacet(String name, Entry[] entries) {
+    public InternalRangeFacet(String name, Entry[] entries, long missing, long other) {
         super(name);
         this.entries = entries;
+        this.missing = missing;
+        this.other = other;
     }
 
     @Override
@@ -87,14 +91,17 @@ public class InternalRangeFacet extends InternalFacet implements RangeFacet {
             return facets.get(0);
         }
         InternalRangeFacet agg = null;
+        long missing = 0;
         for (Facet facet : facets) {
-            InternalRangeFacet geoDistanceFacet = (InternalRangeFacet) facet;
+            InternalRangeFacet rangeFacet = (InternalRangeFacet) facet;
             if (agg == null) {
-                agg = geoDistanceFacet;
+                agg = rangeFacet;
             } else {
-                for (int i = 0; i < geoDistanceFacet.entries.length; i++) {
+                agg.missing += rangeFacet.missing;
+                agg.other += rangeFacet.other;
+                for (int i = 0; i < rangeFacet.entries.length; i++) {
                     RangeFacet.Entry aggEntry = agg.entries[i];
-                    RangeFacet.Entry currentEntry = geoDistanceFacet.entries[i];
+                    RangeFacet.Entry currentEntry = rangeFacet.entries[i];
                     aggEntry.count += currentEntry.count;
                     aggEntry.totalCount += currentEntry.totalCount;
                     aggEntry.total += currentEntry.total;
@@ -119,6 +126,8 @@ public class InternalRangeFacet extends InternalFacet implements RangeFacet {
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
+        missing = in.readVLong();
+        other = in.readVLong();
         entries = new Entry[in.readVInt()];
         for (int i = 0; i < entries.length; i++) {
             Entry entry = new Entry();
@@ -135,6 +144,7 @@ public class InternalRangeFacet extends InternalFacet implements RangeFacet {
             entry.total = in.readDouble();
             entry.min = in.readDouble();
             entry.max = in.readDouble();
+            entry.missing = in.readVLong();
             entries[i] = entry;
         }
     }
@@ -142,6 +152,8 @@ public class InternalRangeFacet extends InternalFacet implements RangeFacet {
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
+        out.writeVLong(missing);
+        out.writeVLong(other);
         out.writeVInt(entries.length);
         for (Entry entry : entries) {
             out.writeDouble(entry.from);
@@ -163,11 +175,14 @@ public class InternalRangeFacet extends InternalFacet implements RangeFacet {
             out.writeDouble(entry.total);
             out.writeDouble(entry.min);
             out.writeDouble(entry.max);
+            out.writeVLong(entry.missing);
         }
     }
 
     static final class Fields {
         static final XContentBuilderString _TYPE = new XContentBuilderString("_type");
+        static final XContentBuilderString MISSING = new XContentBuilderString("missing");
+        static final XContentBuilderString OTHER = new XContentBuilderString("other");
         static final XContentBuilderString RANGES = new XContentBuilderString("ranges");
         static final XContentBuilderString FROM = new XContentBuilderString("from");
         static final XContentBuilderString FROM_STR = new XContentBuilderString("from_str");
@@ -185,6 +200,8 @@ public class InternalRangeFacet extends InternalFacet implements RangeFacet {
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject(getName());
         builder.field(Fields._TYPE, "range");
+        builder.field(Fields.MISSING, missing);
+        builder.field(Fields.OTHER, other);
         builder.startArray(Fields.RANGES);
         for (Entry entry : entries) {
             builder.startObject();
@@ -209,6 +226,9 @@ public class InternalRangeFacet extends InternalFacet implements RangeFacet {
             builder.field(Fields.TOTAL_COUNT, entry.getTotalCount());
             builder.field(Fields.TOTAL, entry.getTotal());
             builder.field(Fields.MEAN, entry.getMean());
+            if (entry.missing > 0) {
+                builder.field(Fields.MISSING, entry.missing);
+            }
             builder.endObject();
         }
         builder.endArray();

@@ -7,7 +7,7 @@
  * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing,
  * software distributed under the License is distributed on an
@@ -30,18 +30,18 @@ import java.io.IOException;
 /**
  *
  */
-public class RangeFacetExecutor extends FacetExecutor {
+public class MissingValueFieldMappingRangeFacetExecutor extends FacetExecutor {
 
-    private final IndexNumericFieldData indexFieldData;
+    private final IndexNumericFieldData keyIndexFieldData;
 
     private final RangeFacet.Entry[] entries;
 
     private long missing;
     private long other;
 
-    public RangeFacetExecutor(IndexNumericFieldData indexFieldData, RangeFacet.Entry[] entries) {
-        this.indexFieldData = indexFieldData;
+    public MissingValueFieldMappingRangeFacetExecutor(IndexNumericFieldData keyIndexFieldData, RangeFacet.Entry[] entries) {
         this.entries = entries;
+        this.keyIndexFieldData = keyIndexFieldData;
     }
 
     @Override
@@ -57,66 +57,57 @@ public class RangeFacetExecutor extends FacetExecutor {
     class Collector extends FacetExecutor.Collector {
 
         private final RangeProc rangeProc;
-        private DoubleValues values;
+        private DoubleValues keyValues;
 
         public Collector() {
-            rangeProc = new RangeProc(entries);
+            this.rangeProc = new RangeProc(entries);
         }
 
         @Override
         public void setNextReader(AtomicReaderContext context) throws IOException {
-            values = indexFieldData.load(context).getDoubleValues();
+            keyValues = keyIndexFieldData.load(context).getDoubleValues();
         }
 
         @Override
         public void collect(int doc) throws IOException {
-            rangeProc.onDoc(doc, values);
+            rangeProc.onDoc(doc, keyValues);
         }
 
         @Override
         public void postCollection() {
-            RangeFacetExecutor.this.missing = rangeProc.missing;
-            RangeFacetExecutor.this.other = rangeProc.other;
+            MissingValueFieldMappingRangeFacetExecutor.this.missing = rangeProc.missing;
+            MissingValueFieldMappingRangeFacetExecutor.this.other = rangeProc.other;
         }
     }
 
     public static class RangeProc {
 
         private final RangeFacet.Entry[] entries;
-        private long missing;
-        private long other;
+
+        long missing;
+        long other;
 
         public RangeProc(RangeFacet.Entry[] entries) {
             this.entries = entries;
         }
 
-        public void onDoc(int docId, DoubleValues values) {
-
-            if (!values.hasValue(docId)) {
+        public void onDoc(int docId, DoubleValues keyValues) {
+            if (!keyValues.hasValue(docId)) {
                 missing++;
                 return;
             }
 
             boolean docMatched = false;
-
             for (RangeFacet.Entry entry : entries) {
-                DoubleValues.Iter iter = values.getIter(docId);
                 boolean docCounted = false;
-                while (iter.hasNext()) {
-                    double value = iter.next();
-                    if (value >= entry.getFrom() && value < entry.getTo()) {
+                for (DoubleValues.Iter keys = keyValues.getIter(docId); keys.hasNext();) {
+                    double key = keys.next();
+                    if (key >= entry.getFrom() && key < entry.getTo()) {
                         docMatched = true;
                         if (!docCounted) {
                             entry.count++;
+                            entry.missing++;
                             docCounted = true;
-                        }
-                        entry.totalCount++;
-                        entry.total += value;
-                        if (value < entry.min) {
-                            entry.min = value;
-                        }
-                        if (value > entry.max) {
-                            entry.max = value;
                         }
                     }
                 }
@@ -125,7 +116,6 @@ public class RangeFacetExecutor extends FacetExecutor {
             if (!docMatched) {
                 other++;
             }
-
         }
     }
 }
