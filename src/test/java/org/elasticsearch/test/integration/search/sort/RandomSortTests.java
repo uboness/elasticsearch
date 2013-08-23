@@ -25,6 +25,7 @@ import org.elasticsearch.common.Priority;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.test.integration.AbstractSharedClusterTest;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -100,6 +101,91 @@ public class RandomSortTests extends AbstractSharedClusterTest {
                 assertThat(searchResponse.getHits().getAt(2).id(), equalTo(ids[2]));
             }
         }
+    }
+
+    @Test @Ignore
+    public void distribution() throws Exception {
+        int count = 10000;
+
+        prepareCreate("test").execute().actionGet();
+        ensureGreen();
+
+        for (int i = 0; i < count; i++) {
+            index("test", "type", "" + i, jsonBuilder().startObject().endObject());
+        }
+
+        flush();
+
+        int[] matrix = new int[count];
+
+//        BufferedImage img =
+//                new BufferedImage(100, 100,
+//                        BufferedImage.TYPE_INT_ARGB);
+//
+//        Graphics2D g = img.createGraphics();
+//        g.setColor(new Color(255, 255, 255, 100));
+        for (int i = 0; i < count; i++) {
+
+            SearchResponse searchResponse = client().prepareSearch()
+                    .setQuery(matchAllQuery())
+                    .addSort(SortBuilders.randomSort(System.nanoTime()))
+                    .execute().actionGet();
+
+            int id = Integer.valueOf(searchResponse.getHits().getAt(0).id());
+
+//            int x = id / 100;
+//            int y = id % 100;
+//            g.drawLine(x, y, x, y);
+
+            matrix[id]++;
+        }
+
+//        File outputfile = new File("random.png");
+//        outputfile.createNewFile();
+//        ImageIO.write(img, "png", outputfile);
+
+        int filled = 0;
+        int maxRepeat = 0;
+        int sumRepeat = 0;
+        for (int i = 0; i < matrix.length; i++) {
+            int value = matrix[i];
+            sumRepeat += value;
+            maxRepeat = Math.max(maxRepeat, value);
+            if (value > 0) {
+                filled++;
+            }
+        }
+
+        System.out.println();
+        System.out.println("max repeat: " +  maxRepeat);
+        System.out.println("avg repeat: " +  sumRepeat / (double)filled);
+        System.out.println("distribution: " +  filled/(double)count);
+
+        int percentile50 = filled / 2;
+        int percentile25 = (filled / 4);
+        int percentile75 = percentile50 + percentile25;
+
+        int sum = 0;
+
+        for (int i = 0; i < matrix.length; i++) {
+            if (matrix[i] == 0) {
+                continue;
+            }
+            sum += i * matrix[i];
+            if (percentile50 == 0) {
+                System.out.println("median: " + i);
+            } else if (percentile25 == 0) {
+                System.out.println("percentile_25: " + i);
+            } else if (percentile75 == 0) {
+                System.out.println("percentile_75: " + i);
+            }
+            percentile50--;
+            percentile25--;
+            percentile75--;
+        }
+
+        System.out.println("mean: " + sum/(double)count);
+
     }
 
 }

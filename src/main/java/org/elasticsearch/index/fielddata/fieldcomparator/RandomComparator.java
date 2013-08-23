@@ -32,7 +32,7 @@ import java.io.IOException;
 */
 public class RandomComparator extends FieldComparator<Long> {
 
-    private final long[] values;
+    private final int[] values;
     private final long salt;
 
     private int docBase;
@@ -65,7 +65,7 @@ public class RandomComparator extends FieldComparator<Long> {
     }
 
     RandomComparator(int numHits, long seed, SearchShardTarget shardTarget) {
-        values = new long[numHits];
+        values = new int[numHits];
         this.salt = salt(seed, shardTarget.index(), shardTarget.shardId());
     }
 
@@ -79,7 +79,7 @@ public class RandomComparator extends FieldComparator<Long> {
 
     @Override
     public int compareBottom(int doc) {
-        long value = random(salt, docBase + doc);
+        int value = hash(docBase + doc, salt);
         if (bottom > value) {
             return 1;
         }
@@ -88,7 +88,7 @@ public class RandomComparator extends FieldComparator<Long> {
 
     @Override
     public void copy(int slot, int doc) {
-        values[slot] = random(salt, docBase + doc);
+        values[slot] = hash(docBase + doc, salt);
     }
 
     @Override
@@ -110,30 +110,96 @@ public class RandomComparator extends FieldComparator<Long> {
     @Override
     public int compareDocToValue(int doc, Long valueObj) {
         final long value = valueObj.longValue();
-        long docValue = random(salt, docBase + doc);
+        long docValue = hash(docBase + doc, salt);
         if (docValue < value) {
             return -1;
         }
         return docValue > value ? 1 : 0;
     }
 
-    public static long random(long salt, int doc) {
-        long x = doc + salt * 2057;
-        x ^= x << 32 ^ x >> 32;
-        x ^= (x << 21);
-        x ^= (x >>> 35);
-        x ^= (x << 4);
-        return (x < 0) ? -x : x;
-    }
+//    public static long hash(int doc, long salt) {
+//        long x = doc + salt * 2057;
+//        x ^= x << 32 ^ x >> 32;
+//        x ^= (x << 21);
+//        x ^= (x >>> 35);
+//        x ^= (x << 4);
+//        return (x < 0) ? -x : x;
+//    }
 
     public static long salt(long seed, String index, int shardId) {
         long salt = index.hashCode();
-        salt += 31 * shardId;
-        salt ^= salt << 32;
-        salt += 31 * salt + seed;
-        salt ^= salt << 13;
-        salt ^= salt >> 25;
-        return salt;
+        salt = salt << 32;
+        salt |= shardId;
+        return salt^seed;
     }
+
+
+//    public float hash(int doc, long salt) {
+//        int m = 0x5bd1e995;
+//        int r = 24;
+//        int h = seed ^ len;
+//        for (int i = 0; i < 2; i++) {
+//            int i_4 = offset + (i << 2);
+//            int k = data[i_4 + 3];
+//            k = k << 8;
+//            k = k | (data[i_4 + 2] & 0xff);
+//            k = k << 8;
+//            k = k | (data[i_4 + 1] & 0xff);
+//            k = k << 8;
+//            k = k | (data[i_4 + 0] & 0xff);
+//            k *= m;
+//            k ^= k >>> r;
+//            k *= m;
+//            h *= m;
+//            h ^= k;
+//        }
+//        int len_m = len_4 << 2;
+//        int left = len - len_m;
+//        if (left != 0) {
+//            if (left >= 3) {
+//                h ^= data[offset + len - 3] << 16;
+//            }
+//            if (left >= 2) {
+//                h ^= data[offset + len - 2] << 8;
+//            }
+//            if (left >= 1) {
+//                h ^= data[offset + len - 1];
+//            }
+//            h *= m;
+//        }
+//        h ^= h >>> 13;
+//        h *= m;
+//        h ^= h >>> 15;
+//        return h;
+//    }
+
+    public static int hash(int doc, long salt) {
+
+        long rand = doc;
+        rand |= rand << 32;
+
+//        int m = 0x5bd1e995;
+        int m = (int) salt;
+        int r = 24;
+
+        int h = 0;
+
+        int k = (int) rand * m;
+        k ^= k >>> r;
+        h ^= k * m;
+
+        k = (int) (rand >> 32) * m;
+        k ^= k >>> r;
+        h *= m;
+        h ^= k * m;
+
+        h ^= h >>> 13;
+        h *= m;
+        h ^= h >>> 15;
+
+        return h;
+    }
+
+
 
 }
