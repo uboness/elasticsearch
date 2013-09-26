@@ -17,7 +17,7 @@
  * under the License.
  */
 
-package org.elasticsearch.ttl;
+package org.elasticsearch.indices.ttl;
 
 import org.elasticsearch.action.admin.indices.stats.IndicesStatsResponse;
 import org.elasticsearch.action.get.GetResponse;
@@ -32,24 +32,29 @@ import org.junit.Test;
 import static org.elasticsearch.common.settings.ImmutableSettings.settingsBuilder;
 import static org.hamcrest.Matchers.*;
 
-@ClusterScope(scope=Scope.TEST)
-public class SimpleTTLTests extends AbstractIntegrationTest {
+@ClusterScope(scope=Scope.SUITE)
+public class DocumentsTTLTests extends AbstractIntegrationTest {
 
     static private final long PURGE_INTERVAL = 200;
-    
+
     @Override
     protected Settings nodeSettings(int nodeOrdinal) {
-        return settingsBuilder()
-                .put(super.nodeSettings(nodeOrdinal))
-                .put("indices.ttl.interval", PURGE_INTERVAL)
-                .put("index.number_of_shards", 2) // 2 shards to test TTL purge with routing properly
-                .put("cluster.routing.operation.use_type", false) // make sure we control the shard computation
-                .put("cluster.routing.operation.hash.type", "djb")
-                .build();
+
+            String intervalSetting = randomBoolean() ? "indices.docs_ttl.interval" : "indices.ttl.interval";
+            logger.info("using docs_ttl interval setting [" + intervalSetting + "]");
+
+            // for bwc
+            return settingsBuilder()
+                    .put(super.nodeSettings(nodeOrdinal))
+                    .put(intervalSetting, PURGE_INTERVAL)
+                    .put("index.number_of_shards", 2) // 2 shards to test TTL purge with routing properly
+                    .put("cluster.routing.operation.use_type", false) // make sure we control the shard computation
+                    .put("cluster.routing.operation.hash.type", "djb")
+                    .build();
     }
 
     @Test
-    public void testSimpleTTL() throws Exception {
+    public void testSimpleDocsTTL() throws Exception {
 
         client().admin().indices().prepareCreate("test")
                 .addMapping("type1", XContentFactory.jsonBuilder()

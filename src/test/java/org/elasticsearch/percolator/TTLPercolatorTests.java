@@ -96,7 +96,7 @@ public class TTLPercolatorTests extends AbstractIntegrationTest {
             Thread.sleep(waitTime); // Doesn't make sense to check the deleteCount before ttl has expired
         }
 
-        // See comment in SimpleTTLTests
+        // See comment in DocumentsTTLTests
         logger.info("Checking if the ttl purger has run");
         long currentDeleteCount;
         do {

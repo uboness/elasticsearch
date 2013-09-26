@@ -38,7 +38,7 @@ import org.elasticsearch.index.shard.service.InternalIndexShard;
 import org.elasticsearch.index.store.support.AbstractIndexStore;
 import org.elasticsearch.index.translog.TranslogService;
 import org.elasticsearch.index.translog.fs.FsTranslog;
-import org.elasticsearch.indices.ttl.IndicesTTLService;
+import org.elasticsearch.indices.ttl.DocumentsTTLService;
 import org.elasticsearch.indices.warmer.InternalIndicesWarmer;
 
 /**
@@ -65,7 +65,7 @@ public class IndexDynamicSettingsModule extends AbstractModule {
         indexDynamicSettings.addDynamicSetting(IndexMetaData.SETTING_BLOCKS_WRITE);
         indexDynamicSettings.addDynamicSetting(IndexMetaData.SETTING_BLOCKS_METADATA);
         indexDynamicSettings.addDynamicSetting(IndexShardGatewayService.INDEX_GATEWAY_SNAPSHOT_INTERVAL, Validator.TIME);
-        indexDynamicSettings.addDynamicSetting(IndicesTTLService.INDEX_TTL_DISABLE_PURGE);
+        indexDynamicSettings.addDynamicSetting(DocumentsTTLService.INDEX_TTL_DISABLE_PURGE);
         indexDynamicSettings.addDynamicSetting(InternalIndexShard.INDEX_REFRESH_INTERVAL, Validator.TIME);
         indexDynamicSettings.addDynamicSetting(LocalGatewayAllocator.INDEX_RECOVERY_INITIAL_SHARDS);
         indexDynamicSettings.addDynamicSetting(LogByteSizeMergePolicyProvider.INDEX_MERGE_POLICY_MIN_MERGE_SIZE, Validator.BYTES_SIZE);
