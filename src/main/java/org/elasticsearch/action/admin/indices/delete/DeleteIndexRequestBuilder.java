@@ -52,6 +52,14 @@ public class DeleteIndexRequestBuilder extends MasterNodeOperationRequestBuilder
         return this;
     }
 
+    /**
+     * Sets the reason for this delete index request.
+     */
+    public DeleteIndexRequestBuilder setReason(String reason) {
+        request.reason(reason);
+        return this;
+    }
+
     @Override
     protected void doExecute(ActionListener<DeleteIndexResponse> listener) {
         ((IndicesAdminClient) client).delete(request, listener);

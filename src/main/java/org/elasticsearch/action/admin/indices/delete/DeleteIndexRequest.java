@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.indices.delete;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionRequestValidationException;
 import org.elasticsearch.action.support.master.MasterNodeOperationRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
@@ -39,6 +40,8 @@ public class DeleteIndexRequest extends MasterNodeOperationRequest<DeleteIndexRe
     private String[] indices;
 
     private TimeValue timeout = timeValueSeconds(60);
+
+    private String reason;
 
     DeleteIndexRequest() {
     }
@@ -84,11 +87,26 @@ public class DeleteIndexRequest extends MasterNodeOperationRequest<DeleteIndexRe
     }
 
     /**
+     * @return The reason for this delete index request, or {@code null} if the reason wasn't provided.
+     */
+    String reason() {
+        return reason;
+    }
+
+    /**
      * Timeout to wait for the index deletion to be acknowledged by current cluster nodes. Defaults
      * to <tt>10s</tt>.
      */
     public DeleteIndexRequest timeout(TimeValue timeout) {
         this.timeout = timeout;
+        return this;
+    }
+
+    /**
+     * Sets the reason for this delete index request.
+     */
+    public DeleteIndexRequest reason(String reason) {
+        this.reason = reason;
         return this;
     }
 
@@ -108,6 +126,11 @@ public class DeleteIndexRequest extends MasterNodeOperationRequest<DeleteIndexRe
             indices[i] = in.readString();
         }
         timeout = readTimeValue(in);
+        if (in.getVersion().onOrAfter(Version.V_0_90_6)) {
+            reason = in.readOptionalString();
+        } else {
+            reason = null;
+        }
     }
 
     @Override
@@ -122,5 +145,8 @@ public class DeleteIndexRequest extends MasterNodeOperationRequest<DeleteIndexRe
             }
         }
         timeout.writeTo(out);
+        if (out.getVersion().onOrAfter(Version.V_0_90_6)) {
+            out.writeOptionalString(reason);
+        }
     }
 }

@@ -36,7 +36,7 @@ public interface LocalNodeMasterListener {
     void offMaster();
 
     /**
-     * The name of the executor that the implementation of the callbacks of this lister should be executed on. The thread
+     * The name of the executor that the implementation of the callbacks of this listener should be executed on. The thread
      * that is responsible for managing instances of this lister is the same thread handling the cluster state events. If
      * the work done is the callbacks above is inexpensive, this value may be {@link org.elasticsearch.threadpool.ThreadPool.Names#SAME SAME}
      * (indicating that the callbaks will run on the same thread as the cluster state events are fired with). On the other hand,

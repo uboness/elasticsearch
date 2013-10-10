@@ -106,6 +106,9 @@ public class TransportDeleteIndexAction extends TransportMasterNodeOperationActi
         // TODO: this API should be improved, currently, if one delete index failed, we send a failure, we should send a response array that includes all the indices that were deleted
         final AtomicInteger count = new AtomicInteger(request.indices().length);
         for (final String index : request.indices()) {
+
+            logger.info("deleting index [{}] - reason: [{}]", index, request.reason() == null ? "<not provided>" : request.reason());
+
             deleteIndexService.deleteIndex(new MetaDataDeleteIndexService.Request(index).timeout(request.timeout()).masterTimeout(request.masterNodeTimeout()), new MetaDataDeleteIndexService.Listener() {
 
                 private volatile Throwable lastFailure;
