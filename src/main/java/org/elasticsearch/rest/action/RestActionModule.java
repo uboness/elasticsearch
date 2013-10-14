@@ -20,7 +20,9 @@
 package org.elasticsearch.rest.action;
 
 import com.google.common.collect.Lists;
+import org.elasticsearch.cluster.routing.allocation.decider.AllocationDecider;
 import org.elasticsearch.common.inject.AbstractModule;
+import org.elasticsearch.common.inject.multibindings.Multibinder;
 import org.elasticsearch.rest.BaseRestHandler;
 import org.elasticsearch.rest.action.admin.cluster.health.RestClusterHealthAction;
 import org.elasticsearch.rest.action.admin.cluster.node.hotthreads.RestNodesHotThreadsAction;
@@ -113,6 +115,9 @@ public class RestActionModule extends AbstractModule {
             bind(restAction).asEagerSingleton();
         }
 
+        Multibinder<BaseRestHandler> handlerBinder = Multibinder.newSetBinder(binder(), BaseRestHandler.class);
+        handlerBinder.addBinding().to(RestClusterHealthAction.class).asEagerSingleton();
+
         bind(RestMainAction.class).asEagerSingleton();
 
         bind(RestNodesInfoAction.class).asEagerSingleton();
@@ -121,7 +126,7 @@ public class RestActionModule extends AbstractModule {
         bind(RestNodesShutdownAction.class).asEagerSingleton();
         bind(RestNodesRestartAction.class).asEagerSingleton();
         bind(RestClusterStateAction.class).asEagerSingleton();
-        bind(RestClusterHealthAction.class).asEagerSingleton();
+//        bind(RestClusterHealthAction.class).asEagerSingleton();
         bind(RestClusterUpdateSettingsAction.class).asEagerSingleton();
         bind(RestClusterGetSettingsAction.class).asEagerSingleton();
         bind(RestClusterRerouteAction.class).asEagerSingleton();

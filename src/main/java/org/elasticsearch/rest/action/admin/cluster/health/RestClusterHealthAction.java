@@ -29,24 +29,37 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentBuilderString;
 import org.elasticsearch.rest.*;
 import org.elasticsearch.rest.action.support.RestXContentBuilder;
+import org.elasticsearch.rest.support.*;
 
 import java.io.IOException;
 import java.util.Locale;
 
 import static org.elasticsearch.client.Requests.clusterHealthRequest;
+import static org.elasticsearch.rest.RestRequest.Method.GET;
 import static org.elasticsearch.rest.RestStatus.PRECONDITION_FAILED;
+import static org.elasticsearch.rest.support.Param.Type.*;
 
-/**
- *
- */
+@Endpoints({
+        @Endpoint(method = GET, uri = "/_cluster/health"),
+        @Endpoint(method = GET, uri = "/_cluster/health/{index}", parts = {
+                @Part(name = "index", description = "Limit the information returned to a specific index")
+        })
+})
+@Params({
+        @Param(name = "local",                         type = BOOLEAN,     defaultsTo = "false",   description = "Return local information, do not retrieve the state from master node"),
+        @Param(name = "master_timeout",                type = TIME,        defaultsTo = "30s",     description = "Explicit operation timeout for connection to master node"),
+        @Param(name = "timeout",                       type = TIME,        defaultsTo = "30s",     description = "Explicit operation timeout"),
+        @Param(name = "wait_for_status",               type = ENUM,        defaultsTo = "",        description = "Wait until cluster is in a specific state", options =  { "green", "yellow", "red" }),
+        @Param(name = "wait_for_relocating_shards",    type = NUMBER,      defaultsTo = "",        description = "Wait until the specified number of relocating shards is finished"),
+        @Param(name = "wait_for_active_shards",        type = NUMBER,      defaultsTo = "",        description = "Wait until the specified number of shards is active"),
+        @Param(name = "wait_for_nodes",                type = STRING,      defaultsTo = "",        description = "Wait until the specified number of nodes is available"),
+        @Param(name = "level",                         type = ENUM,        defaultsTo = "cluster", description = "Specify the level of detail for returned information", options = { "cluster", "indices", "shards"}),
+})
 public class RestClusterHealthAction extends BaseRestHandler {
 
     @Inject
-    public RestClusterHealthAction(Settings settings, Client client, RestController controller) {
+    public RestClusterHealthAction(Settings settings, Client client) {
         super(settings, client);
-
-        controller.registerHandler(RestRequest.Method.GET, "/_cluster/health", this);
-        controller.registerHandler(RestRequest.Method.GET, "/_cluster/health/{index}", this);
     }
 
     @Override
