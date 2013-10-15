@@ -53,6 +53,7 @@ public class RestDeleteWarmerAction extends BaseRestHandler {
                 .indices(Strings.splitStringByCommaToArray(request.param("index")));
         deleteWarmerRequest.listenerThreaded(false);
         deleteWarmerRequest.masterNodeTimeout(request.paramAsTime("master_timeout", deleteWarmerRequest.masterNodeTimeout()));
+        deleteWarmerRequest.annotation(request.param("annotation", null));
         client.admin().indices().deleteWarmer(deleteWarmerRequest, new ActionListener<DeleteWarmerResponse>() {
             @Override
             public void onResponse(DeleteWarmerResponse response) {

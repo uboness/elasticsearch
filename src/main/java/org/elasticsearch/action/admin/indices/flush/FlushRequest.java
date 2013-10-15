@@ -42,6 +42,8 @@ public class FlushRequest extends BroadcastOperationRequest<FlushRequest> {
     private boolean force = false;
     private boolean full = false;
 
+    private String annotation;
+
     FlushRequest() {
 
     }
@@ -82,6 +84,15 @@ public class FlushRequest extends BroadcastOperationRequest<FlushRequest> {
     public FlushRequest force(boolean force) {
         this.force = force;
         return this;
+    }
+
+    public FlushRequest annotation(String annotation) {
+        this.annotation = annotation;
+        return this;
+    }
+
+    public String annotation() {
+        return annotation;
     }
 
     @Override

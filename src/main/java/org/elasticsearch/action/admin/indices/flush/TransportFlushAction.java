@@ -110,6 +110,9 @@ public class TransportFlushAction extends TransportBroadcastOperationAction<Flus
 
     @Override
     protected ShardFlushResponse shardOperation(ShardFlushRequest request) throws ElasticSearchException {
+        if (request.annotation() != null) {
+            logAnnotation(logger, request, transportAction(), request.annotation());
+        }
         IndexShard indexShard = indicesService.indexServiceSafe(request.index()).shardSafe(request.shardId());
         indexShard.flush(new Engine.Flush().type(request.full() ? Engine.Flush.Type.NEW_WRITER : Engine.Flush.Type.COMMIT_TRANSLOG).force(request.force()));
         return new ShardFlushResponse(request.index(), request.shardId());

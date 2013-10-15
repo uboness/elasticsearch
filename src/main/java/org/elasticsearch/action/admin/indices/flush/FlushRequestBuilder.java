@@ -38,6 +38,11 @@ public class FlushRequestBuilder extends BroadcastOperationRequestBuilder<FlushR
         return this;
     }
 
+    public FlushRequestBuilder setAnnotation(String annotation) {
+        request.annotation(annotation);
+        return this;
+    }
+
     @Override
     protected void doExecute(ActionListener<FlushResponse> listener) {
         ((IndicesAdminClient) client).flush(request, listener);

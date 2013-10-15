@@ -52,6 +52,7 @@ public class RestDeleteIndexTemplateAction extends BaseRestHandler {
         deleteIndexTemplateRequest.listenerThreaded(false);
         deleteIndexTemplateRequest.timeout(request.paramAsTime("timeout", timeValueSeconds(10)));
         deleteIndexTemplateRequest.masterNodeTimeout(request.paramAsTime("master_timeout", deleteIndexTemplateRequest.masterNodeTimeout()));
+        deleteIndexTemplateRequest.annotation(request.param("annotation", null));
         client.admin().indices().deleteTemplate(deleteIndexTemplateRequest, new ActionListener<DeleteIndexTemplateResponse>() {
             @Override
             public void onResponse(DeleteIndexTemplateResponse response) {

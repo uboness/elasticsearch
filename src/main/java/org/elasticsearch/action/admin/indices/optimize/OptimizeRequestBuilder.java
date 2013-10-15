@@ -74,6 +74,15 @@ public class OptimizeRequestBuilder extends BroadcastOperationRequestBuilder<Opt
         return this;
     }
 
+    /**
+     * Annotates the request with an annotation that will be logged at {@code info} level in the log files. It is highly encourages
+     * to annotation this request as it can provide valuable information when tracing the logs.
+     */
+    public OptimizeRequestBuilder setAnnotation(String annotation) {
+        request.annotation(annotation);
+        return this;
+    }
+
     @Override
     protected void doExecute(ActionListener<OptimizeResponse> listener) {
         ((IndicesAdminClient) client).optimize(request, listener);

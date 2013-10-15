@@ -59,6 +59,7 @@ public class RestClearIndicesCacheAction extends BaseRestHandler {
     public void handleRequest(final RestRequest request, final RestChannel channel) {
         ClearIndicesCacheRequest clearIndicesCacheRequest = new ClearIndicesCacheRequest(Strings.splitStringByCommaToArray(request.param("index")));
         clearIndicesCacheRequest.listenerThreaded(false);
+        clearIndicesCacheRequest.annotation(request.param("annotation", null));
         if (request.hasParam("ignore_indices")) {
             clearIndicesCacheRequest.ignoreIndices(IgnoreIndices.fromString(request.param("ignore_indices")));
         }

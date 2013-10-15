@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.indices.cache.clear;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.support.broadcast.BroadcastOperationRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -36,6 +37,7 @@ public class ClearIndicesCacheRequest extends BroadcastOperationRequest<ClearInd
     private boolean recycler = false;
     private String[] fields = null;
     private String[] filterKeys = null;
+    private String annotation;
     
 
     ClearIndicesCacheRequest() {
@@ -99,6 +101,15 @@ public class ClearIndicesCacheRequest extends BroadcastOperationRequest<ClearInd
         return this;
     }
 
+    public String annotation() {
+        return annotation;
+    }
+
+    public ClearIndicesCacheRequest annotation(String annotation) {
+        this.annotation = annotation;
+        return this;
+    }
+
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         filterCache = in.readBoolean();
@@ -107,6 +118,11 @@ public class ClearIndicesCacheRequest extends BroadcastOperationRequest<ClearInd
         recycler = in.readBoolean();
         fields = in.readStringArray();
         filterKeys = in.readStringArray();
+        if (in.getVersion().onOrAfter(Version.V_0_90_6)) {
+            annotation = in.readOptionalString();
+        } else {
+            annotation = null;
+        }
     }
 
     public void writeTo(StreamOutput out) throws IOException {
@@ -117,6 +133,9 @@ public class ClearIndicesCacheRequest extends BroadcastOperationRequest<ClearInd
         out.writeBoolean(recycler);
         out.writeStringArrayNullable(fields);
         out.writeStringArrayNullable(filterKeys);
+        if (out.getVersion().onOrAfter(Version.V_0_90_6)) {
+            out.writeOptionalString(annotation);
+        }
     }
 
    

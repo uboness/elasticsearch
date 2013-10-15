@@ -54,6 +54,8 @@ public class OptimizeRequest extends BroadcastOperationRequest<OptimizeRequest> 
     private boolean onlyExpungeDeletes = Defaults.ONLY_EXPUNGE_DELETES;
     private boolean flush = Defaults.FLUSH;
 
+    private String annotation;
+
     /**
      * Constructs an optimization request over one or more indices.
      *
@@ -128,6 +130,23 @@ public class OptimizeRequest extends BroadcastOperationRequest<OptimizeRequest> 
      */
     public OptimizeRequest flush(boolean flush) {
         this.flush = flush;
+        return this;
+    }
+
+    /**
+     * @return The annotation that is associated with this request, or {@code null} if no annotation was set.
+     * @see #annotation(String)
+     */
+    public String annnotation() {
+        return annotation;
+    }
+
+    /**
+     * Annotates the request with an annotation that will be logged at {@code info} level in the log files. It is highly encourages
+     * to annotation this request as it can provide valuable information when tracing the logs.
+     */
+    public OptimizeRequest annotation(String annotation) {
+        this.annotation = annotation;
         return this;
     }
 

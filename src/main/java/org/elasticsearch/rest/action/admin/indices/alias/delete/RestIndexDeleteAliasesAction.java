@@ -53,6 +53,7 @@ public class RestIndexDeleteAliasesAction extends BaseRestHandler {
         indicesAliasesRequest.timeout(request.paramAsTime("timeout", timeValueSeconds(10)));
         indicesAliasesRequest.removeAlias(index, alias);
         indicesAliasesRequest.masterNodeTimeout(request.paramAsTime("master_timeout", indicesAliasesRequest.masterNodeTimeout()));
+        indicesAliasesRequest.annotation(request.param("annotation", null));
 
         client.admin().indices().aliases(indicesAliasesRequest, new ActionListener<IndicesAliasesResponse>() {
 

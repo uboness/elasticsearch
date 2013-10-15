@@ -49,6 +49,7 @@ public class RestClusterUpdateSettingsAction extends BaseRestHandler {
         final ClusterUpdateSettingsRequest clusterUpdateSettingsRequest = Requests.clusterUpdateSettingsRequest();
         clusterUpdateSettingsRequest.listenerThreaded(false);
         clusterUpdateSettingsRequest.masterNodeTimeout(request.paramAsTime("master_timeout", clusterUpdateSettingsRequest.masterNodeTimeout()));
+        clusterUpdateSettingsRequest.annotation(request.param("annotation", null));
         try {
             Map<String, Object> source = XContentFactory.xContent(request.content()).createParser(request.content()).mapAndClose();
             if (source.containsKey("transient")) {

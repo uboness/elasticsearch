@@ -21,6 +21,7 @@ package org.elasticsearch.action.admin.cluster.node.restart;
 
 import org.elasticsearch.ElasticSearchException;
 import org.elasticsearch.ElasticSearchIllegalStateException;
+import org.elasticsearch.Version;
 import org.elasticsearch.action.ActionListener;
 import org.elasticsearch.action.support.nodes.NodeOperationRequest;
 import org.elasticsearch.action.support.nodes.TransportNodesOperationAction;
@@ -119,6 +120,9 @@ public class TransportNodesRestartAction extends TransportNodesOperationAction<N
             return new NodesRestartResponse.NodeRestartResponse(clusterService.localNode());
         }
         logger.info("Restarting in [{}]", request.delay);
+        if (request.annotation != null) {
+            logger.info("[annotation][{}] - {}", NodesRestartAction.NAME, request.annotation);
+        }
         threadPool.schedule(request.delay, ThreadPool.Names.GENERIC, new Runnable() {
             @Override
             public void run() {
@@ -157,6 +161,7 @@ public class TransportNodesRestartAction extends TransportNodesOperationAction<N
     protected static class NodeRestartRequest extends NodeOperationRequest {
 
         TimeValue delay;
+        String annotation;
 
         private NodeRestartRequest() {
         }
@@ -164,18 +169,27 @@ public class TransportNodesRestartAction extends TransportNodesOperationAction<N
         private NodeRestartRequest(String nodeId, NodesRestartRequest request) {
             super(request, nodeId);
             this.delay = request.delay;
+            this.annotation = request.annotation;
         }
 
         @Override
         public void readFrom(StreamInput in) throws IOException {
             super.readFrom(in);
             delay = readTimeValue(in);
+            if (in.getVersion().onOrAfter(Version.V_0_90_6)) {
+                annotation = in.readOptionalString();
+            } else {
+                annotation = null;
+            }
         }
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
             super.writeTo(out);
             delay.writeTo(out);
+            if (out.getVersion().onOrAfter(Version.V_0_90_6)) {
+                out.writeOptionalString(annotation);
+            }
         }
     }
 }

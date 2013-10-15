@@ -39,6 +39,7 @@ import static org.elasticsearch.rest.RestRequest.Method.POST;
 import static org.elasticsearch.rest.RestStatus.BAD_REQUEST;
 import static org.elasticsearch.rest.RestStatus.OK;
 import static org.elasticsearch.rest.action.support.RestActions.buildBroadcastShardsHeader;
+import static org.elasticsearch.rest.action.support.RestActions.parseQuerySource;
 
 /**
  *
@@ -67,6 +68,7 @@ public class RestOptimizeAction extends BaseRestHandler {
             optimizeRequest.maxNumSegments(request.paramAsInt("max_num_segments", optimizeRequest.maxNumSegments()));
             optimizeRequest.onlyExpungeDeletes(request.paramAsBoolean("only_expunge_deletes", optimizeRequest.onlyExpungeDeletes()));
             optimizeRequest.flush(request.paramAsBoolean("flush", optimizeRequest.flush()));
+            optimizeRequest.annotation(request.param("annotation", null));
 
             BroadcastOperationThreading operationThreading = BroadcastOperationThreading.fromString(request.param("operation_threading"), BroadcastOperationThreading.THREAD_PER_SHARD);
             if (operationThreading == BroadcastOperationThreading.NO_THREADS) {

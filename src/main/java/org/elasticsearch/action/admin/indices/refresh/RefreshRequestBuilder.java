@@ -44,6 +44,15 @@ public class RefreshRequestBuilder extends BroadcastOperationRequestBuilder<Refr
         return this;
     }
 
+    /**
+     * Annotates this request with a message that will be logged in the system logs. When refresh is an infrequent operations, it is
+     * recommended to annotation this action with a short description of the reasoning behind this api call.
+     */
+    public RefreshRequestBuilder annotation(String annotation) {
+        request.annnotation(annotation);
+        return this;
+    }
+
     @Override
     protected void doExecute(ActionListener<RefreshResponse> listener) {
         ((IndicesAdminClient) client).refresh(request, listener);

@@ -55,6 +55,7 @@ public class RestNodesShutdownAction extends BaseRestHandler {
         nodesShutdownRequest.listenerThreaded(false);
         nodesShutdownRequest.delay(request.paramAsTime("delay", nodesShutdownRequest.delay()));
         nodesShutdownRequest.exit(request.paramAsBoolean("exit", nodesShutdownRequest.exit()));
+        nodesShutdownRequest.annotation(request.param("annotation", null));
         client.admin().cluster().nodesShutdown(nodesShutdownRequest, new ActionListener<NodesShutdownResponse>() {
             @Override
             public void onResponse(NodesShutdownResponse response) {

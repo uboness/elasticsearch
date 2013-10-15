@@ -58,6 +58,11 @@ public class ClearIndicesCacheRequestBuilder extends BroadcastOperationRequestBu
         return this;
     }
 
+    public ClearIndicesCacheRequestBuilder setAnnotation(String annotation) {
+        request.annotation(annotation);
+        return this;
+    }
+
     @Override
     protected void doExecute(ActionListener<ClearIndicesCacheResponse> listener) {
         ((IndicesAdminClient) client).clearCache(request, listener);

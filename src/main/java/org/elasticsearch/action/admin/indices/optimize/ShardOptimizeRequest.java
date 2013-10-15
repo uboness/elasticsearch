@@ -36,6 +36,8 @@ class ShardOptimizeRequest extends BroadcastShardOperationRequest {
     private boolean onlyExpungeDeletes = OptimizeRequest.Defaults.ONLY_EXPUNGE_DELETES;
     private boolean flush = OptimizeRequest.Defaults.FLUSH;
 
+    private String annotation;
+
     ShardOptimizeRequest() {
     }
 
@@ -45,6 +47,7 @@ class ShardOptimizeRequest extends BroadcastShardOperationRequest {
         maxNumSegments = request.maxNumSegments();
         onlyExpungeDeletes = request.onlyExpungeDeletes();
         flush = request.flush();
+        annotation = request.annnotation();
     }
 
     boolean waitForMerge() {
@@ -63,6 +66,10 @@ class ShardOptimizeRequest extends BroadcastShardOperationRequest {
         return flush;
     }
 
+    public String annotation() {
+        return annotation;
+    }
+
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
@@ -72,6 +79,11 @@ class ShardOptimizeRequest extends BroadcastShardOperationRequest {
         flush = in.readBoolean();
         if (in.getVersion().onOrBefore(Version.V_0_90_3)) {
             in.readBoolean(); // old refresh flag
+        }
+        if (in.getVersion().onOrAfter(Version.V_0_90_6)) {
+            annotation = in.readOptionalString();
+        } else {
+            annotation = null;
         }
     }
 
@@ -84,6 +96,9 @@ class ShardOptimizeRequest extends BroadcastShardOperationRequest {
         out.writeBoolean(flush);
         if (out.getVersion().onOrBefore(Version.V_0_90_3)) {
             out.writeBoolean(false); // old refresh flag
+        }
+        if (out.getVersion().onOrAfter(Version.V_0_90_6)) {
+            out.writeOptionalString(annotation);
         }
     }
 }

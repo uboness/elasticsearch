@@ -29,6 +29,7 @@ import org.elasticsearch.cluster.ClusterState;
 import org.elasticsearch.cluster.TimeoutClusterStateListener;
 import org.elasticsearch.cluster.block.ClusterBlockException;
 import org.elasticsearch.cluster.node.DiscoveryNodes;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.discovery.MasterNotDiscoveredException;
@@ -94,6 +95,10 @@ public abstract class TransportMasterNodeOperationAction<Request extends MasterN
         innerExecute(request, listener, false);
     }
 
+    private static void logAnnotation(ESLogger logger, String location, String action, String annotation) {
+        logger.info("[annotation][{}][{}] - {}", location, action, annotation);
+    }
+
     private void innerExecute(final Request request, final ActionListener<Response> listener, final boolean retrying) {
         final ClusterState clusterState = clusterService.state();
         final DiscoveryNodes nodes = clusterState.nodes();
@@ -142,6 +147,9 @@ public abstract class TransportMasterNodeOperationAction<Request extends MasterN
                         @Override
                         public void run() {
                             try {
+                                if (request.annotation != null) {
+                                    logAnnotation(logger, "master", transportAction, request.annotation);
+                                }
                                 masterOperation(request, clusterService.state(), listener);
                             } catch (Throwable e) {
                                 listener.onFailure(e);
@@ -192,6 +200,9 @@ public abstract class TransportMasterNodeOperationAction<Request extends MasterN
                 return;
             }
             processBeforeDelegationToMaster(request, clusterState);
+            if (request.annotation != null) {
+                logAnnotation(logger, "coordinator", transportAction, request.annotation);
+            }
             transportService.sendRequest(nodes.masterNode(), transportAction, request, new BaseTransportResponseHandler<Response>() {
                 @Override
                 public Response newInstance() {

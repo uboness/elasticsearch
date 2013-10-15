@@ -33,6 +33,7 @@ class ShardFlushRequest extends BroadcastShardOperationRequest {
 
     private boolean full;
     private boolean force;
+    private String annotation;
 
     ShardFlushRequest() {
     }
@@ -41,6 +42,7 @@ class ShardFlushRequest extends BroadcastShardOperationRequest {
         super(index, shardId, request);
         this.full = request.full();
         this.force = request.force();
+        this.annotation = request.annotation();
     }
 
     public boolean full() {
@@ -51,6 +53,10 @@ class ShardFlushRequest extends BroadcastShardOperationRequest {
         return this.force;
     }
 
+    public String annotation() {
+        return annotation;
+    }
+
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
@@ -59,6 +65,11 @@ class ShardFlushRequest extends BroadcastShardOperationRequest {
         }
         full = in.readBoolean();
         force = in.readBoolean();
+        if (in.getVersion().onOrAfter(Version.V_0_90_6)) {
+            annotation = in.readOptionalString();
+        } else {
+            annotation = null;
+        }
     }
 
     @Override
@@ -69,5 +80,8 @@ class ShardFlushRequest extends BroadcastShardOperationRequest {
         }
         out.writeBoolean(full);
         out.writeBoolean(force);
+        if (out.getVersion().onOrAfter(Version.V_0_90_6)) {
+            out.writeOptionalString(annotation);
+        }
     }
 }

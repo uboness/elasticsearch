@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.indices.refresh;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.support.broadcast.BroadcastOperationRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -37,6 +38,8 @@ import java.io.IOException;
 public class RefreshRequest extends BroadcastOperationRequest<RefreshRequest> {
 
     private boolean force = true;
+
+    private String annotation;
 
     RefreshRequest() {
     }
@@ -58,13 +61,33 @@ public class RefreshRequest extends BroadcastOperationRequest<RefreshRequest> {
         return this;
     }
 
+    public String annotation() {
+        return annotation;
+    }
+
+    /**
+     * Annotates this request with a message that will be logged in the system logs.
+     */
+    public RefreshRequest annnotation(String annotation) {
+        this.annotation = annotation;
+        return this;
+    }
+
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         force = in.readBoolean();
+        if (in.getVersion().onOrAfter(Version.V_0_90_6)) {
+            annotation = in.readOptionalString();
+        } else {
+            annotation = null;
+        }
     }
 
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeBoolean(force);
+        if (out.getVersion().onOrAfter(Version.V_0_90_6)) {
+            out.writeOptionalString(annotation);
+        }
     }
 }

@@ -54,6 +54,7 @@ public class RestDeleteMappingAction extends BaseRestHandler {
         deleteMappingRequest.listenerThreaded(false);
         deleteMappingRequest.type(request.param("type"));
         deleteMappingRequest.masterNodeTimeout(request.paramAsTime("master_timeout", deleteMappingRequest.masterNodeTimeout()));
+        deleteMappingRequest.annotation(request.param("annotation", null));
         client.admin().indices().deleteMapping(deleteMappingRequest, new ActionListener<DeleteMappingResponse>() {
             @Override
             public void onResponse(DeleteMappingResponse response) {

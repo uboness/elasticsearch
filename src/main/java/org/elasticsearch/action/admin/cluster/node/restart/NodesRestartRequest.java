@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.cluster.node.restart;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.support.nodes.NodesOperationRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -34,6 +35,7 @@ import static org.elasticsearch.common.unit.TimeValue.readTimeValue;
 public class NodesRestartRequest extends NodesOperationRequest<NodesRestartRequest> {
 
     TimeValue delay = TimeValue.timeValueSeconds(1);
+    String annotation;
 
     protected NodesRestartRequest() {
     }
@@ -61,6 +63,29 @@ public class NodesRestartRequest extends NodesOperationRequest<NodesRestartReque
         return delay(TimeValue.parseTimeValue(delay, null));
     }
 
+    /**
+     * Annotates this action with an annotation message that will be logged in elasticsearch logs. It is highly encouraged to annotate
+     * operations such as no restart with meaningful text indicating the reasoning/cause for this api call.
+     */
+    public NodesRestartRequest annotation(String annotation) {
+        this.annotation = annotation;
+        return this;
+    }
+
+    /**
+     * @return The annotation this request is annotated with.
+     *
+     * @see #annotation(String)
+     */
+    public String annotation() {
+        return annotation;
+    }
+
+    /**
+     * @return The delay for the restart to occur.
+     *
+     * @see #delay(String)
+     */
     public TimeValue delay() {
         return this.delay;
     }
@@ -69,11 +94,19 @@ public class NodesRestartRequest extends NodesOperationRequest<NodesRestartReque
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         delay = readTimeValue(in);
+        if (in.getVersion().onOrAfter(Version.V_0_90_6)) {
+            annotation = in.readOptionalString();
+        } else {
+            annotation = null;
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         delay.writeTo(out);
+        if (out.getVersion().onOrAfter(Version.V_0_90_6)) {
+            out.writeOptionalString(annotation);
+        }
     }
 }

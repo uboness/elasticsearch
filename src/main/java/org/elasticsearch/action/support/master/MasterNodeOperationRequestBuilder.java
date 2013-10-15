@@ -51,4 +51,14 @@ public abstract class MasterNodeOperationRequestBuilder<Request extends MasterNo
         return (RequestBuilder) this;
     }
 
+    /**
+     * Annotates the request with additional information about it which will in turn be logged in the log file. It is highly recommended
+     * to annotate any request that changes the cluster state as it makes it easier to trace the cluster state in the logs.
+     */
+    @SuppressWarnings("unchecked")
+    public final RequestBuilder setAnnotation(String annotation) {
+        request.annotation(annotation);
+        return (RequestBuilder) this;
+    }
+
 }

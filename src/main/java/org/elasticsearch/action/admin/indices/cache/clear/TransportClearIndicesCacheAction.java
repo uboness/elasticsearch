@@ -117,6 +117,9 @@ public class TransportClearIndicesCacheAction extends TransportBroadcastOperatio
 
     @Override
     protected ShardClearIndicesCacheResponse shardOperation(ShardClearIndicesCacheRequest request) throws ElasticSearchException {
+        if (request.annotation() != null) {
+            logAnnotation(logger, request, transportAction(), request.annotation());
+        }
         IndexService service = indicesService.indexService(request.index());
         if (service != null) {
             // we always clear the query cache

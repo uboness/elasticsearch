@@ -33,6 +33,7 @@ import org.elasticsearch.cluster.routing.GroupShardsIterator;
 import org.elasticsearch.cluster.routing.ShardIterator;
 import org.elasticsearch.cluster.routing.ShardRouting;
 import org.elasticsearch.common.Nullable;
+import org.elasticsearch.common.logging.ESLogger;
 import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.threadpool.ThreadPool;
 import org.elasticsearch.transport.*;
@@ -73,6 +74,12 @@ public abstract class TransportBroadcastOperationAction<Request extends Broadcas
     @Override
     protected void doExecute(Request request, ActionListener<Response> listener) {
         new AsyncBroadcastAction(request, listener).start();
+    }
+
+    protected static <R extends BroadcastShardOperationRequest> void logAnnotation(ESLogger logger, R request, String action, String annotation) {
+        if (annotation != null) {
+            logger.info("[annotation][shard[{}/{}]][{}] - {}", request.index(), request.shardId(), action, annotation);
+        }
     }
 
     protected abstract String transportAction();

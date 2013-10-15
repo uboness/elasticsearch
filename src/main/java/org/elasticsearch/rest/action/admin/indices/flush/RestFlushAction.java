@@ -69,6 +69,7 @@ public class RestFlushAction extends BaseRestHandler {
         flushRequest.operationThreading(operationThreading);
         flushRequest.full(request.paramAsBoolean("full", flushRequest.full()));
         flushRequest.force(request.paramAsBoolean("force", flushRequest.force()));
+        flushRequest.annotation(request.param("annotation", null));
         client.admin().indices().flush(flushRequest, new ActionListener<FlushResponse>() {
             @Override
             public void onResponse(FlushResponse response) {

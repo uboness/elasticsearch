@@ -19,6 +19,7 @@
 
 package org.elasticsearch.action.admin.indices.refresh;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.support.broadcast.BroadcastShardOperationRequest;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
@@ -32,27 +33,42 @@ class ShardRefreshRequest extends BroadcastShardOperationRequest {
 
     private boolean force = true;
 
+    private String annotation;
+
     ShardRefreshRequest() {
     }
 
     public ShardRefreshRequest(String index, int shardId, RefreshRequest request) {
         super(index, shardId, request);
         force = request.force();
+        annotation = request.annotation();
     }
 
     public boolean force() {
         return force;
     }
 
+    public String annotation() {
+        return annotation;
+    }
+
     @Override
     public void readFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         force = in.readBoolean();
+        if (in.getVersion().onOrAfter(Version.V_0_90_6)) {
+            annotation = in.readOptionalString();
+        } else {
+            annotation = null;
+        }
     }
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
         super.writeTo(out);
         out.writeBoolean(force);
+        if (out.getVersion().onOrAfter(Version.V_0_90_6)) {
+            out.writeOptionalString(annotation);
+        }
     }
 }

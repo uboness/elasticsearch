@@ -50,6 +50,15 @@ public class NodesRestartRequestBuilder extends NodesOperationRequestBuilder<Nod
         return this;
     }
 
+    /**
+     * Annotates this action with an annotation message that will be logged in elasticsearch logs. It is highly encouraged to annotate
+     * operations such as no restart with meaningful text indicating the reasoning/cause for this api call.
+     */
+    public NodesRestartRequestBuilder setAnnotation(String annotation) {
+        request.annotation(annotation);
+        return this;
+    }
+
     @Override
     protected void doExecute(ActionListener<NodesRestartResponse> listener) {
         ((ClusterAdminClient) client).nodesRestart(request, listener);

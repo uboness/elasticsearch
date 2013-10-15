@@ -57,6 +57,7 @@ public class RestIndicesAliasesAction extends BaseRestHandler {
         IndicesAliasesRequest indicesAliasesRequest = new IndicesAliasesRequest();
         indicesAliasesRequest.listenerThreaded(false);
         indicesAliasesRequest.masterNodeTimeout(request.paramAsTime("master_timeout", indicesAliasesRequest.masterNodeTimeout()));
+        indicesAliasesRequest.annotation(request.param("annotation", null));
         XContentParser parser = null;
         try {
             // {
