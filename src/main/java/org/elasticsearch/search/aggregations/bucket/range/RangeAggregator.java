@@ -126,6 +126,7 @@ public class RangeAggregator extends BucketsAggregator {
         final int valuesCount = values.setDocument(doc);
         for (int i = 0, lo = 0; i < valuesCount; ++i) {
             final double value = values.nextValue();
+            System.out.println("value[" + System.identityHashCode(values) + "][" + doc + "]: " + value);
             lo = collect(doc, value, lo);
         }
     }
