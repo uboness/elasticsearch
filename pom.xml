@@ -990,7 +990,7 @@
                                 <exclude>org/elasticsearch/plugins/PluginManager.class</exclude>
                                 <exclude>org/elasticsearch/bootstrap/Bootstrap.class</exclude>
                                 <exclude>org/elasticsearch/Version.class</exclude>
-                                <exclude>org/elasticsearch/search/aggregations/metrics/percentile/providers/tdigest/GroupTree.class</exclude>
+                                <exclude>org/elasticsearch/search/aggregations/metrics/percentile/tdigest/GroupTree.class</exclude>
                                 <!-- end excludes for valid system-out -->
                                 <!-- start excludes for Unsafe -->
                                 <exclude>org/elasticsearch/common/util/UnsafeUtils.class</exclude>
