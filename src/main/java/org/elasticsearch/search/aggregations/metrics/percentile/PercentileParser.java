@@ -128,6 +128,8 @@ public class PercentileParser implements Aggregator.Parser {
             }
         }
 
+        PercentilesEstimator.Factory estimatorFactory = executionHint.estimatorFactory(settings);
+
         if (script != null) {
             config.script(context.scriptService().search(context.lookup(), scriptLang, script, scriptParams));
         }
@@ -137,18 +139,18 @@ public class PercentileParser implements Aggregator.Parser {
         }
 
         if (field == null) {
-            return new PercentileAggregator.Factory(aggregationName, config, executionHint.estimatorFactory(settings), percents, keyed);
+            return new PercentileAggregator.Factory(aggregationName, config, percents, estimatorFactory, keyed);
         }
 
         FieldMapper<?> mapper = context.smartNameFieldMapper(field);
         if (mapper == null) {
             config.unmapped(true);
-            return new PercentileAggregator.Factory(aggregationName, config, executionHint.estimatorFactory(settings), percents, keyed);
+            return new PercentileAggregator.Factory(aggregationName, config, percents, estimatorFactory, keyed);
         }
 
         IndexFieldData<?> indexFieldData = context.fieldData().getForField(mapper);
         config.fieldContext(new FieldContext(field, indexFieldData));
-        return new PercentileAggregator.Factory(aggregationName, config, executionHint.estimatorFactory(settings), percents, keyed);
+        return new PercentileAggregator.Factory(aggregationName, config, percents, estimatorFactory, keyed);
     }
 
 }

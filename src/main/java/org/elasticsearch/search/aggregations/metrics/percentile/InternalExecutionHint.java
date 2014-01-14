@@ -32,26 +32,26 @@ public enum InternalExecutionHint {
 
     FRUGAL() {
         @Override
-        public InternalPercentiles.Estimator.Factory estimatorFactory(Map <String, Object> settings) {
+        public PercentilesEstimator.Factory estimatorFactory(Map<String, Object> settings) {
             return new Frugal.Factory();
         }
     },
 
     TDIGEST() {
         @Override
-        public InternalPercentiles.Estimator.Factory estimatorFactory(Map <String, Object> settings) {
+        public PercentilesEstimator.Factory estimatorFactory(Map<String, Object> settings) {
             return new TDigest.Factory(settings);
         }
     },
 
     QDIGEST() {
         @Override
-        public InternalPercentiles.Estimator.Factory estimatorFactory(Map <String, Object> settings) {
+        public PercentilesEstimator.Factory estimatorFactory(Map<String, Object> settings) {
             return new QDigest.Factory(settings);
         }
     };
 
-    public abstract InternalPercentiles.Estimator.Factory estimatorFactory(Map <String, Object> settings);
+    public abstract PercentilesEstimator.Factory estimatorFactory(Map<String, Object> settings);
 
     public static InternalExecutionHint resolve(String name) {
         if (name.equals("frugal")) {

@@ -1,97 +1,126 @@
 package org.elasticsearch.search.aggregations.metrics.percentile.qdigest;
 
-import org.apache.lucene.util.RamUsageEstimator;
 import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
-import org.elasticsearch.search.aggregations.metrics.percentile.InternalPercentiles;
+import org.elasticsearch.common.util.BigArrays;
+import org.elasticsearch.common.util.ObjectArray;
+import org.elasticsearch.search.aggregations.metrics.percentile.PercentilesEstimator;
 
 import java.io.IOException;
 import java.util.Map;
 
-public class QDigest extends InternalPercentiles.Estimator<QDigest> {
+public class QDigest extends PercentilesEstimator {
 
     public final static byte ID = 1;
 
-    public QDigestState state;
+    public ObjectArray<QDigestState> states;
+    private final double compression;
 
-    private QDigest() {} // for serialization
-
-    @Override
-    protected byte id() {
-        return ID;
-    }
-
-    public QDigest(double[] percents, double compression) {
+    public QDigest(double[] percents, double compression, long estimatedBucketCount) {
         super(percents);
-        state = new QDigestState(compression);
+        this.compression = compression;
+        states = BigArrays.newObjectArray(estimatedBucketCount);
     }
 
-    public void offer(double value) {
+    public void offer(double value, long bucketOrd) {
+        QDigestState state = states.get(bucketOrd);
+        if (state == null) {
+            state = new QDigestState(compression);
+            states.set(bucketOrd, state);
+        }
         state.offer((long) value);
     }
 
-    public double estimate(int index) {
-        return !state.isEmpty() ? state.getQuantile(percents[index] / 100) : Double.NaN;
-    }
-
-    @Override
-    public Merger merger(int expectedMerges) {
-        return new Merger();
-    }
-
     public long ramBytesUsed() {
-        return RamUsageEstimator.NUM_BYTES_OBJECT_REF + state.ramBytesUsed() +
-               RamUsageEstimator.NUM_BYTES_ARRAY_HEADER + percents.length * 8;
-    }
-
-    public static QDigest readNewFrom(StreamInput in) throws IOException {
-        QDigest digest = new QDigest();
-        digest.readFrom(in);
-        return digest;
+        //todo impl
+        return -1;
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.percents = new double[in.readInt()];
-        for (int i = 0; i < percents.length; i++) {
-            percents[i] = in.readDouble();
-        }
-        state = QDigestState.read(in);
+    public PercentilesEstimator.Flyweight flyweight(long bucketOrd) {
+        return new Flyweight(percents, states.get(bucketOrd));
     }
-
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeInt(percents.length);
-        for (int i = 0 ; i < percents.length; ++i) {
-            out.writeDouble(percents[i]);
-        }
-        QDigestState.write(state, out);
+    public PercentilesEstimator.Flyweight emptyFlyweight() {
+        return new Flyweight(percents, null);
     }
 
-    public static class Merger implements InternalPercentiles.Estimator.Merger<QDigest> {
+    public static class Flyweight extends PercentilesEstimator.Flyweight<QDigest, Flyweight> {
 
-        private QDigest reduced;
+        public QDigestState state;
 
-        @Override
-        public void add(QDigest qDigest) {
-            if (reduced == null) {
-                reduced = qDigest;
-                return;
-            }
-            if (reduced.state.isEmpty()) {
-                return;
-            }
-            reduced.state = QDigestState.unionOf(reduced.state, qDigest.state);
+        public Flyweight() {} // for serialization
+
+        public Flyweight(double[] percents, QDigestState state) {
+            super(percents);
+            this.state = state;
         }
 
         @Override
-        public QDigest merge() {
-            return reduced;
+        protected byte id() {
+            return ID;
+        }
+
+        @Override
+        public double estimate(int index) {
+            return state == null || state.isEmpty() ? Double.NaN : state.getQuantile(percents[index] / 100);
+        }
+
+        @Override
+        public Merger merger(int estimatedMerges) {
+            return new Merger();
+        }
+
+        public static Flyweight read(StreamInput in) throws IOException {
+            Flyweight flyweight = new Flyweight();
+            flyweight.readFrom(in);
+            return flyweight;
+        }
+
+        @Override
+        public void readFrom(StreamInput in) throws IOException {
+            this.percents = new double[in.readInt()];
+            for (int i = 0; i < percents.length; i++) {
+                percents[i] = in.readDouble();
+            }
+            state = QDigestState.read(in);
+        }
+
+        @Override
+        public void writeTo(StreamOutput out) throws IOException {
+            out.writeInt(percents.length);
+            for (int i = 0 ; i < percents.length; ++i) {
+                out.writeDouble(percents[i]);
+            }
+            QDigestState.write(state, out);
+        }
+
+        public class Merger implements PercentilesEstimator.Flyweight.Merger<QDigest, Flyweight> {
+
+            private Flyweight merged;
+
+            @Override
+            public void add(Flyweight flyweight) {
+                if (merged == null || merged.state == null) {
+                    merged = flyweight;
+                    return;
+                }
+
+                if (flyweight.state == null || flyweight.state.isEmpty()) {
+                    return;
+                }
+                merged.state = QDigestState.unionOf(merged.state, flyweight.state);
+            }
+
+            @Override
+            public Flyweight merge() {
+                return merged;
+            }
         }
     }
 
-    public static class Factory implements InternalPercentiles.Estimator.Factory<QDigest> {
+    public static class Factory implements PercentilesEstimator.Factory<QDigest> {
 
         private final double compression;
 
@@ -106,8 +135,8 @@ public class QDigest extends InternalPercentiles.Estimator<QDigest> {
             this.compression = compression;
         }
 
-        public QDigest create(double[] percents) {
-            return new QDigest(percents, compression);
+        public QDigest create(double[] percents, long estimatedBucketCount) {
+            return new QDigest(percents, compression, estimatedBucketCount);
         }
     }
 
