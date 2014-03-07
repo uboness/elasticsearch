@@ -18,26 +18,26 @@
  */
 package org.elasticsearch.search.aggregations.bucket.histogram;
 
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.rounding.Rounding;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.fielddata.IndexFieldData;
-import org.elasticsearch.index.mapper.FieldMapper;
+import org.elasticsearch.common.xcontent.XContentPushParser;
 import org.elasticsearch.search.SearchParseException;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactory;
-import org.elasticsearch.search.aggregations.support.FieldContext;
+import org.elasticsearch.search.aggregations.support.ValueSourceParser;
 import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
 import org.elasticsearch.search.aggregations.support.numeric.NumericValuesSource;
-import org.elasticsearch.search.aggregations.support.numeric.ValueFormatter;
 import org.elasticsearch.search.internal.SearchContext;
 
 import java.io.IOException;
-import java.util.Map;
 
 /**
  * Parses the histogram request
  */
 public class HistogramParser implements Aggregator.Parser {
+
+    private static final ParseField MIN_DOC_COUNT = new ParseField("min_doc_count");
 
     @Override
     public String type() {
@@ -47,109 +47,95 @@ public class HistogramParser implements Aggregator.Parser {
     @Override
     public AggregatorFactory parse(String aggregationName, XContentParser parser, SearchContext context) throws IOException {
 
-        ValuesSourceConfig<NumericValuesSource> config = new ValuesSourceConfig<NumericValuesSource>(NumericValuesSource.class);
+        InternalParser internalParser = XContentPushParser.object(new InternalParser(aggregationName, context)).parse(parser);
 
-        String field = null;
-        String script = null;
-        String scriptLang = null;
-        Map<String, Object> scriptParams = null;
+        return new HistogramAggregator.Factory(aggregationName, internalParser.valuesSourceConfig, internalParser.rounding, internalParser.order,
+                internalParser.keyed, internalParser.minDocCount, InternalHistogram.FACTORY);
+    }
+
+    private static class InternalParser extends XContentPushParser.AbstractCallback<InternalParser> {
+
+        private final String aggregationName;
+        private final SearchContext context;
+        private final ValueSourceParser<NumericValuesSource> valueSourceParser;
+
+        ValuesSourceConfig<NumericValuesSource> valuesSourceConfig;
         boolean keyed = false;
         long minDocCount = 1;
         InternalOrder order = (InternalOrder) InternalOrder.KEY_ASC;
-        long interval = -1;
-        boolean assumeSorted = false;
+        Rounding rounding = null;
         String format = null;
 
-        XContentParser.Token token;
-        String currentFieldName = null;
-        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-            if (token == XContentParser.Token.FIELD_NAME) {
-                currentFieldName = parser.currentName();
-            } else if (token == XContentParser.Token.VALUE_STRING) {
-                if ("field".equals(currentFieldName)) {
-                    field = parser.text();
-                } else if ("script".equals(currentFieldName)) {
-                    script = parser.text();
-                } else if ("lang".equals(currentFieldName)) {
-                    scriptLang = parser.text();
-                } else if ("format".equals(currentFieldName)) {
-                    format = parser.text();
-                } else {
-                    throw new SearchParseException(context, "Unknown key for a " + token + " in aggregation [" + aggregationName + "]: [" + currentFieldName + "].");
-                }
-            } else if (token == XContentParser.Token.VALUE_NUMBER) {
-                if ("interval".equals(currentFieldName)) {
-                    interval = parser.longValue();
-                } else if ("min_doc_count".equals(currentFieldName) || "minDocCount".equals(currentFieldName)) {
-                    minDocCount = parser.longValue();
-                } else {
-                    throw new SearchParseException(context, "Unknown key for a " + token + " in aggregation [" + aggregationName + "]: [" + currentFieldName + "].");
-                }
-            } else if (token == XContentParser.Token.VALUE_BOOLEAN) {
-                if ("keyed".equals(currentFieldName)) {
-                    keyed = parser.booleanValue();
-                } else if ("script_values_sorted".equals(currentFieldName) || "scriptValuesSorted".equals(currentFieldName)) {
-                    assumeSorted = parser.booleanValue();
-                } else {
-                    throw new SearchParseException(context, "Unknown key for a " + token + " in aggregation [" + aggregationName + "]: [" + currentFieldName + "].");
-                }
-            } else if (token == XContentParser.Token.START_OBJECT) {
-                if ("params".equals(currentFieldName)) {
-                    scriptParams = parser.map();
-                } else if ("order".equals(currentFieldName)) {
-                    while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                        if (token == XContentParser.Token.FIELD_NAME) {
-                            currentFieldName = parser.currentName();
-                        } else if (token == XContentParser.Token.VALUE_STRING) {
-                            String dir = parser.text();
-                            boolean asc = "asc".equals(dir);
-                            if (!asc && !"desc".equals(dir)) {
-                                throw new SearchParseException(context, "Unknown order direction [" + dir + "] in aggregation [" + aggregationName + "]. Should be either [asc] or [desc]");
-                            }
-                            order = resolveOrder(currentFieldName, asc);
-                        }
-                    }
-                } else {
-                    throw new SearchParseException(context, "Unknown key for a " + token + " in aggregation [" + aggregationName + "]: [" + currentFieldName + "].");
-                }
-            } else {
-                throw new SearchParseException(context, "Unexpected token " + token + " in aggregation [" + aggregationName + "].");
+        boolean inOrder = false;
+
+        private InternalParser(String aggregationName, SearchContext context) {
+            this.aggregationName = aggregationName;
+            this.context = context;
+            this.valueSourceParser = new ValueSourceParser<NumericValuesSource>(NumericValuesSource.class, context);
+        }
+
+        @Override
+        public InternalParser process() {
+            valuesSourceConfig = valueSourceParser.process();
+
+            if (rounding == null) {
+                throw new SearchParseException(context, "Missing required field [interval] for histogram aggregation [" + aggregationName + "]");
             }
+
+            return this;
         }
 
-        if (interval < 0) {
-            throw new SearchParseException(context, "Missing required field [interval] for histogram aggregation [" + aggregationName + "]");
-        }
-        Rounding rounding = new Rounding.Interval(interval);
-
-        if (script != null) {
-            config.script(context.scriptService().search(context.lookup(), scriptLang, script, scriptParams));
+        @Override
+        public boolean on(XContentParser.Token token, XContentParser parser) throws IOException {
+            boolean consumed = super.on(token, parser);
+            return valueSourceParser.on(token, parser) || consumed;
         }
 
-        if (!assumeSorted) {
-            // we need values to be sorted and unique for efficiency
-            config.ensureSorted(true);
+        @Override
+        protected boolean onValue(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            if (inOrder) {
+                order = resolveOrder(name, "asc".equals(parser.text()));
+                return true;
+            }
+            if (!currentRoot()) {
+                return false;
+            }
+            if ("format".equals(name)) {
+                format = parser.text();
+                return true;
+            }
+            if ("interval".equals(name)) {
+                rounding = new Rounding.Interval(parser.longValue());
+                return true;
+            }
+            if (MIN_DOC_COUNT.match(name)) {
+                minDocCount = parser.longValue();
+                return true;
+            }
+            if ("keyed".equals(name)) {
+                keyed = parser.booleanValue();
+                return true;
+            }
+            return false;
         }
 
-        if (field == null) {
-            return new HistogramAggregator.Factory(aggregationName, config, rounding, order, keyed, minDocCount, InternalHistogram.FACTORY);
+        @Override
+        protected boolean onObjectStart(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            if (currentRoot() && "order".equals(name)) {
+                inOrder = true;
+                return true;
+            }
+            return false;
         }
 
-        FieldMapper<?> mapper = context.smartNameFieldMapper(field);
-        if (mapper == null) {
-            config.unmapped(true);
-            return new HistogramAggregator.Factory(aggregationName, config, rounding, order, keyed, minDocCount, InternalHistogram.FACTORY);
+        @Override
+        protected boolean onObjectEnd(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            if (currentRoot() && "order".equals(name)) {
+                inOrder = false;
+                return true;
+            }
+            return false;
         }
-
-        IndexFieldData<?> indexFieldData = context.fieldData().getForField(mapper);
-        config.fieldContext(new FieldContext(field, indexFieldData));
-
-        if (format != null) {
-            config.formatter(new ValueFormatter.Number.Pattern(format));
-        }
-
-        return new HistogramAggregator.Factory(aggregationName, config, rounding, order, keyed, minDocCount, InternalHistogram.FACTORY);
-
     }
 
     static InternalOrder resolveOrder(String key, boolean asc) {

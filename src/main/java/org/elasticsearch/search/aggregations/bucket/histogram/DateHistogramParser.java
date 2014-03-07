@@ -19,20 +19,19 @@
 package org.elasticsearch.search.aggregations.bucket.histogram;
 
 import com.google.common.collect.ImmutableMap;
+import org.elasticsearch.common.ParseField;
 import org.elasticsearch.common.collect.MapBuilder;
 import org.elasticsearch.common.joda.DateMathParser;
 import org.elasticsearch.common.rounding.DateTimeUnit;
 import org.elasticsearch.common.rounding.TimeZoneRounding;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentParser;
-import org.elasticsearch.index.fielddata.IndexFieldData;
-import org.elasticsearch.index.mapper.FieldMapper;
+import org.elasticsearch.common.xcontent.XContentPushParser;
 import org.elasticsearch.index.mapper.core.DateFieldMapper;
-import org.elasticsearch.script.SearchScript;
 import org.elasticsearch.search.SearchParseException;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactory;
-import org.elasticsearch.search.aggregations.support.FieldContext;
+import org.elasticsearch.search.aggregations.support.ValueSourceParser;
 import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
 import org.elasticsearch.search.aggregations.support.numeric.NumericValuesSource;
 import org.elasticsearch.search.aggregations.support.numeric.ValueFormatter;
@@ -41,17 +40,13 @@ import org.elasticsearch.search.internal.SearchContext;
 import org.joda.time.DateTimeZone;
 
 import java.io.IOException;
-import java.util.Map;
 
 /**
  *
  */
 public class DateHistogramParser implements Aggregator.Parser {
 
-    private final ImmutableMap<String, DateTimeUnit> dateFieldUnits;
-
-    public DateHistogramParser() {
-        dateFieldUnits = MapBuilder.<String, DateTimeUnit>newMapBuilder()
+    private static final ImmutableMap<String, DateTimeUnit> dateFieldUnits = MapBuilder.<String, DateTimeUnit>newMapBuilder()
                 .put("year", DateTimeUnit.YEAR_OF_CENTURY)
                 .put("1y", DateTimeUnit.YEAR_OF_CENTURY)
                 .put("quarter", DateTimeUnit.QUARTER)
@@ -69,7 +64,6 @@ public class DateHistogramParser implements Aggregator.Parser {
                 .put("second", DateTimeUnit.SECOND_OF_MINUTE)
                 .put("1s", DateTimeUnit.SECOND_OF_MINUTE)
                 .immutableMap();
-    }
 
     @Override
     public String type() {
@@ -79,156 +73,163 @@ public class DateHistogramParser implements Aggregator.Parser {
     @Override
     public AggregatorFactory parse(String aggregationName, XContentParser parser, SearchContext context) throws IOException {
 
-        ValuesSourceConfig<NumericValuesSource> config = new ValuesSourceConfig<NumericValuesSource>(NumericValuesSource.class);
+        InternalParser internalParser = XContentPushParser.object(new InternalParser(aggregationName, context)).parse(parser);
+        return new HistogramAggregator.Factory(aggregationName, internalParser.valuesSourceConfig, internalParser.rounding,
+                internalParser.order, internalParser.keyed, internalParser.minDocCount, InternalDateHistogram.FACTORY);
+    }
 
-        String field = null;
-        String script = null;
-        String scriptLang = null;
-        Map<String, Object> scriptParams = null;
+    private static class InternalParser extends XContentPushParser.AbstractCallback<InternalParser> {
+
+        private static final ParseField TIMEZONE = new ParseField("time_zone");
+        private static final ParseField PREZONE = new ParseField("pre_zone");
+        private static final ParseField PREZONE_ADJUST_LARGE_INTERVAL = new ParseField("pre_zone_adjust_large_interval");
+        private static final ParseField POSTZONE = new ParseField("post_zone");
+        private static final ParseField PREOFFSET = new ParseField("pre_offset");
+        private static final ParseField POSTOFFSET = new ParseField("post_offset");
+        private static final ParseField MIN_DOC_COUNT = new ParseField("min_doc_count");
+
+        private final String aggregationName;
+        private final SearchContext context;
+        private final ValueSourceParser<NumericValuesSource> valueSourceParser;
+
+        ValuesSourceConfig<NumericValuesSource> valuesSourceConfig;
         boolean keyed = false;
         long minDocCount = 1;
         InternalOrder order = (InternalOrder) Histogram.Order.KEY_ASC;
         String interval = null;
+        TimeZoneRounding rounding;
         boolean preZoneAdjustLargeInterval = false;
         DateTimeZone preZone = DateTimeZone.UTC;
         DateTimeZone postZone = DateTimeZone.UTC;
         String format = null;
         long preOffset = 0;
         long postOffset = 0;
-        boolean assumeSorted = false;
 
-        XContentParser.Token token;
-        String currentFieldName = null;
-        while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-            if (token == XContentParser.Token.FIELD_NAME) {
-                currentFieldName = parser.currentName();
-            } else if (token == XContentParser.Token.VALUE_STRING) {
-                if ("field".equals(currentFieldName)) {
-                    field = parser.text();
-                } else if ("script".equals(currentFieldName)) {
-                    script = parser.text();
-                } else if ("lang".equals(currentFieldName)) {
-                    scriptLang = parser.text();
-                } else if ("time_zone".equals(currentFieldName) || "timeZone".equals(currentFieldName)) {
+        boolean inOrder = false;
+
+        private InternalParser(String aggregationName, SearchContext context) {
+            this.aggregationName = aggregationName;
+            this.context = context;
+            this.valueSourceParser = new ValueSourceParser<NumericValuesSource>(NumericValuesSource.class, context);
+        }
+
+        @Override
+        public boolean on(XContentParser.Token token, XContentParser parser) throws IOException {
+            boolean consumed = super.on(token, parser);
+            return valueSourceParser.on(token, parser) || consumed;
+        }
+
+        @Override
+        public InternalParser process() {
+
+            if (interval == null) {
+                throw new SearchParseException(context, "Missing required field [interval] for histogram aggregation [" + aggregationName + "]");
+            }
+
+            valuesSourceConfig = valueSourceParser.process();
+            if (format != null) {
+                valuesSourceConfig.formatter(new ValueFormatter.DateTime(format));
+            }
+            if (valuesSourceConfig.fieldContext() == null) {
+                ValueParser valueParser = new ValueParser.DateMath(new DateMathParser(DateFieldMapper.Defaults.DATE_TIME_FORMATTER, DateFieldMapper.Defaults.TIME_UNIT));
+                valuesSourceConfig.parser(valueParser);
+            }
+
+            TimeZoneRounding.Builder tzRoundingBuilder;
+            DateTimeUnit dateTimeUnit = dateFieldUnits.get(interval);
+            if (dateTimeUnit != null) {
+                tzRoundingBuilder = TimeZoneRounding.builder(dateTimeUnit);
+            } else {
+                // the interval is a time value?
+                tzRoundingBuilder = TimeZoneRounding.builder(TimeValue.parseTimeValue(interval, null));
+            }
+
+            rounding = tzRoundingBuilder
+                    .preZone(preZone).postZone(postZone)
+                    .preZoneAdjustLargeInterval(preZoneAdjustLargeInterval)
+                    .preOffset(preOffset).postOffset(postOffset)
+                    .build();
+
+            return this;
+        }
+
+        @Override
+        protected boolean onValue(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            if (inOrder) {
+                order = resolveOrder(name, "asc".equals(parser.text()));
+                return true;
+            }
+            if (!currentRoot()) {
+                return false;
+            }
+            if (TIMEZONE.match(name) || PREZONE.match(name)) {
+                if (isString(token)) {
                     preZone = parseZone(parser.text());
-                } else if ("pre_zone".equals(currentFieldName) || "preZone".equals(currentFieldName)) {
-                    preZone = parseZone(parser.text());
-                } else if ("pre_zone_adjust_large_interval".equals(currentFieldName) || "preZoneAdjustLargeInterval".equals(currentFieldName)) {
-                    preZoneAdjustLargeInterval = parser.booleanValue();
-                } else if ("post_zone".equals(currentFieldName) || "postZone".equals(currentFieldName)) {
+                } else if (isNumber(token)) {
+                    preZone = DateTimeZone.forOffsetHours(parser.intValue());
+                } else {
+                    throw new SearchParseException(context, "[" + PREZONE.getPreferredName() + "] field in [" + aggregationName + "] must either be a string or an integer");
+                }
+                return true;
+            }
+            if (PREZONE_ADJUST_LARGE_INTERVAL.match(name)) {
+                preZoneAdjustLargeInterval = parser.booleanValue();
+                return true;
+            }
+            if (POSTZONE.match(name)) {
+                if (isString(token)) {
                     postZone = parseZone(parser.text());
-                } else if ("pre_offset".equals(currentFieldName) || "preOffset".equals(currentFieldName)) {
-                    preOffset = parseOffset(parser.text());
-                } else if ("post_offset".equals(currentFieldName) || "postOffset".equals(currentFieldName)) {
-                    postOffset = parseOffset(parser.text());
-                } else if ("interval".equals(currentFieldName)) {
-                    interval = parser.text();
-                } else if ("format".equals(currentFieldName)) {
-                    format = parser.text();
-                } else {
-                    throw new SearchParseException(context, "Unknown key for a " + token + " in [" + aggregationName + "]: [" + currentFieldName + "].");
-                }
-            } else if (token == XContentParser.Token.VALUE_BOOLEAN) {
-                if ("keyed".equals(currentFieldName)) {
-                    keyed = parser.booleanValue();
-                } else if ("script_values_sorted".equals(currentFieldName) || "scriptValuesSorted".equals(currentFieldName)) {
-                    assumeSorted = parser.booleanValue();
-                } else {
-                    throw new SearchParseException(context, "Unknown key for a " + token + " in [" + aggregationName + "]: [" + currentFieldName + "].");
-                }
-            } else if (token == XContentParser.Token.VALUE_NUMBER) {
-                if ("min_doc_count".equals(currentFieldName) || "minDocCount".equals(currentFieldName)) {
-                    minDocCount = parser.longValue();
-                } else if ("time_zone".equals(currentFieldName) || "timeZone".equals(currentFieldName)) {
-                    preZone = DateTimeZone.forOffsetHours(parser.intValue());
-                } else if ("pre_zone".equals(currentFieldName) || "preZone".equals(currentFieldName)) {
-                    preZone = DateTimeZone.forOffsetHours(parser.intValue());
-                } else if ("post_zone".equals(currentFieldName) || "postZone".equals(currentFieldName)) {
+                } else if (isNumber(token)) {
                     postZone = DateTimeZone.forOffsetHours(parser.intValue());
                 } else {
-                    throw new SearchParseException(context, "Unknown key for a " + token + " in [" + aggregationName + "]: [" + currentFieldName + "].");
+                    throw new SearchParseException(context, "[" + POSTZONE.getPreferredName() + "] field in [" + aggregationName + "] must either be a string or an integer");
                 }
-            } else if (token == XContentParser.Token.START_OBJECT) {
-                if ("params".equals(currentFieldName)) {
-                    scriptParams = parser.map();
-                } else if ("order".equals(currentFieldName)) {
-                    while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT) {
-                        if (token == XContentParser.Token.FIELD_NAME) {
-                            currentFieldName = parser.currentName();
-                        } else if (token == XContentParser.Token.VALUE_STRING) {
-                            String dir = parser.text();
-                            boolean asc = "asc".equals(dir);
-                            order = resolveOrder(currentFieldName, asc);
-                            //TODO should we throw an error if the value is not "asc" or "desc"???
-                        }
-                    }
-                } else {
-                    throw new SearchParseException(context, "Unknown key for a " + token + " in [" + aggregationName + "]: [" + currentFieldName + "].");
-                }
-            } else {
-                throw new SearchParseException(context, "Unexpected token " + token + " in [" + aggregationName + "].");
+                return true;
             }
-        }
-
-        if (interval == null) {
-            throw new SearchParseException(context, "Missing required field [interval] for histogram aggregation [" + aggregationName + "]");
-        }
-
-        SearchScript searchScript = null;
-        if (script != null) {
-            searchScript = context.scriptService().search(context.lookup(), scriptLang, script, scriptParams);
-            config.script(searchScript);
-        }
-
-        if (!assumeSorted) {
-            // we need values to be sorted and unique for efficiency
-            config.ensureSorted(true);
-        }
-
-        TimeZoneRounding.Builder tzRoundingBuilder;
-        DateTimeUnit dateTimeUnit = dateFieldUnits.get(interval);
-        if (dateTimeUnit != null) {
-            tzRoundingBuilder = TimeZoneRounding.builder(dateTimeUnit);
-        } else {
-            // the interval is a time value?
-            tzRoundingBuilder = TimeZoneRounding.builder(TimeValue.parseTimeValue(interval, null));
-        }
-
-        TimeZoneRounding rounding = tzRoundingBuilder
-                .preZone(preZone).postZone(postZone)
-                .preZoneAdjustLargeInterval(preZoneAdjustLargeInterval)
-                .preOffset(preOffset).postOffset(postOffset)
-                .build();
-
-        if (format != null) {
-            config.formatter(new ValueFormatter.DateTime(format));
-        }
-
-        if (field == null) {
-
-            if (searchScript != null) {
-                ValueParser valueParser = new ValueParser.DateMath(new DateMathParser(DateFieldMapper.Defaults.DATE_TIME_FORMATTER, DateFieldMapper.Defaults.TIME_UNIT));
-                config.parser(valueParser);
-                return new HistogramAggregator.Factory(aggregationName, config, rounding, order, keyed, minDocCount, InternalDateHistogram.FACTORY);
+            if (PREOFFSET.match(name)) {
+                preOffset = parseOffset(parser.text());
+                return true;
             }
-
-            // falling back on the get field data context
-            return new HistogramAggregator.Factory(aggregationName, config, rounding, order, keyed, minDocCount, InternalDateHistogram.FACTORY);
+            if (POSTOFFSET.match(name)) {
+                postOffset = parseOffset(parser.text());
+                return true;
+            }
+            if ("interval".equals(name)) {
+                interval = parser.text();
+                return true;
+            }
+            if ("format".equals(name)) {
+                format = parser.text();
+                return true;
+            }
+            if ("keyed".equals(name)) {
+                keyed = parser.booleanValue();
+                return true;
+            }
+            if (MIN_DOC_COUNT.match(name)) {
+                minDocCount = parser.longValue();
+                return true;
+            }
+            return false;
         }
 
-        FieldMapper<?> mapper = context.smartNameFieldMapper(field);
-        if (mapper == null) {
-            config.unmapped(true);
-            return new HistogramAggregator.Factory(aggregationName, config, rounding, order, keyed, minDocCount, InternalDateHistogram.FACTORY);
+        @Override
+        protected boolean onObjectStart(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            if ("order".equals(name) && currentRoot()) {
+                inOrder = true;
+                return true;
+            }
+            return false;
         }
 
-        if (!(mapper instanceof DateFieldMapper)) {
-            throw new SearchParseException(context, "date histogram can only be aggregated on date fields but [" + field + "] is not a date field");
+        @Override
+        protected boolean onObjectEnd(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            if ("order".equals(name) && currentRoot()) {
+                inOrder = false;
+                return true;
+            }
+            return false;
         }
-
-        IndexFieldData<?> indexFieldData = context.fieldData().getForField(mapper);
-        config.fieldContext(new FieldContext(field, indexFieldData));
-        return new HistogramAggregator.Factory(aggregationName, config, rounding, order, keyed, minDocCount, InternalDateHistogram.FACTORY);
     }
 
     private static InternalOrder resolveOrder(String key, boolean asc) {
@@ -241,7 +242,7 @@ public class DateHistogramParser implements Aggregator.Parser {
         return new InternalOrder.Aggregation(key, asc);
     }
 
-    private long parseOffset(String offset) throws IOException {
+    private static long parseOffset(String offset) throws IOException {
         if (offset.charAt(0) == '-') {
             return -TimeValue.parseTimeValue(offset.substring(1), null).millis();
         }
@@ -249,7 +250,7 @@ public class DateHistogramParser implements Aggregator.Parser {
         return TimeValue.parseTimeValue(offset.substring(beginIndex), null).millis();
     }
 
-    private DateTimeZone parseZone(String text) throws IOException {
+    private static DateTimeZone parseZone(String text) throws IOException {
         int index = text.indexOf(':');
         if (index != -1) {
             int beginIndex = text.charAt(0) == '+' ? 1 : 0;

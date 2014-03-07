@@ -19,6 +19,8 @@
 
 package org.elasticsearch.common.xcontent;
 
+import com.google.common.base.Objects;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,220 +28,188 @@ import java.util.List;
 /**
  *
  */
-public abstract class XContentPushParser {
+public abstract class XContentPushParser<T> {
 
-    public static interface Callback {
+    public static interface Callback<T> {
 
-        void on(XContentParser.Token token, XContentParser parser) throws IOException;
+        boolean on(XContentParser.Token token, XContentParser parser) throws IOException;
+
+        T process();
 
     }
 
-    public static class AbstractCallback implements Callback {
+    public static abstract class AbstractCallback<T> implements Callback<T> {
 
         protected String fieldName;
         protected final List<String> objects = new ArrayList<>(10);
         protected final List<String> arrays = new ArrayList<>(10);
 
         @Override
-        public void on(XContentParser.Token token, XContentParser parser) throws IOException {
+        public boolean on(XContentParser.Token token, XContentParser parser) throws IOException {
             if (token == XContentParser.Token.FIELD_NAME) {
                 fieldName = parser.currentName();
-                return;
+                return true;
             }
             if (token == XContentParser.Token.START_OBJECT) {
+                boolean consumed = onObjectStart(fieldName, token, parser);
                 objects.add(fieldName);
-                onObjectStart(fieldName, token, parser);
-                return;
+                return consumed;
             }
             if (token == XContentParser.Token.END_OBJECT) {
-                fieldName = objects.remove(objects.size() - 1);
-                onObjectEnd(fieldName, token, parser);
-                return;
+                if (!objects.isEmpty()) {
+                    fieldName = objects.remove(objects.size() - 1);
+                    return onObjectEnd(fieldName, token, parser);
+                }
+                return false;
             }
             if (token == XContentParser.Token.START_ARRAY) {
+                boolean consumed = onArrayStart(fieldName, token, parser);
                 arrays.add(fieldName);
-                onArrayStart(fieldName, token, parser);
                 fieldName = null;
-                return;
+                return consumed;
             }
             if (token == XContentParser.Token.END_ARRAY) {
-                fieldName = arrays.remove(arrays.size() - 1);
-                onArrayEnd(fieldName, token, parser);
-                return;
+                if (!arrays.isEmpty()) {
+                    fieldName = arrays.remove(arrays.size() - 1);
+                    return onArrayEnd(fieldName, token, parser);
+                }
+                return false;
             }
             // must be a value field
-            onValue(fieldName, token, parser);
+            return onValue(fieldName, token, parser);
         }
 
-        void onObjectStart(String name, XContentParser.Token token, XContentParser parser) throws IOException {}
-
-        void onObjectEnd(String name, XContentParser.Token token, XContentParser parser) throws IOException {}
-
-        void onArrayStart(String name, XContentParser.Token token, XContentParser parser) throws IOException {}
-
-        void onArrayEnd(String name, XContentParser.Token token, XContentParser parser) throws IOException {}
-
-        void onValue(String name, XContentParser.Token token, XContentParser parser) throws IOException {}
-    }
-
-    protected final Consumer consumer;
-
-
-    private XContentPushParser(Callback[] callbacks) {
-        this.consumer = new Consumer(callbacks);
-    }
-
-    public abstract void parse(XContentParser parser) throws IOException;
-
-    public static Builder object() {
-        return new Object.Builder();
-    }
-
-    public static Builder array() {
-        return new Array.Builder();
-    }
-
-    public static abstract class Builder<P extends XContentPushParser, B extends Builder> {
-
-        private final List<Callback> callbacks = new ArrayList<Callback>();
-
-        private Builder() {}
-
-        public B add(Callback callback) {
-            callbacks.add(callback);
-            return (B) this;
+        protected boolean currentRoot() {
+            return objects.size() == 0 && arrays.size() == 0;
         }
 
-        public final P build() {
-            return build(callbacks.toArray(new Callback[callbacks.size()]));
-        }
-
-        protected abstract P build(Callback[] callbacks);
-
-    }
-
-    private static class Object extends XContentPushParser {
-
-        private Object(Callback[] callbacks) {
-            super(callbacks);
-        }
-
-        public void parse(XContentParser parser) throws IOException {
-            XContentParser.Token token;
-            do {
-                token = parser.nextToken();
-                consumer.on(token, parser);
-            } while(!consumer.consumed());
-        }
-
-        private static class Builder extends XContentPushParser.Builder<Object, Builder> {
-
-            @Override
-            protected Object build(Callback[] callbacks) {
-                return new Object(callbacks);
+        protected boolean currentObject(String name) {
+            if (objects.isEmpty()) {
+                return false;
             }
-        }
-    }
-
-    private static class Array extends XContentPushParser {
-
-        private Array(Callback[] callbacks) {
-            super(callbacks);
+            return Objects.equal(objects.get(objects.size() - 1), name);
         }
 
-        public void parse(XContentParser parser) throws IOException {
-            XContentParser.Token token;
-            do {
-                token = parser.nextToken();
-                consumer.on(token, parser);
-            } while (!consumer.consumed());
-        }
-
-        private static class Builder extends XContentPushParser.Builder<Array, Builder> {
-
-            @Override
-            protected Array build(Callback[] callbacks) {
-                return new Array(callbacks);
+        protected boolean currentArray(String name) {
+            if (arrays.isEmpty()) {
+                return false;
             }
+            return Objects.equal(arrays.get(arrays.size() - 1), name);
+        }
+
+        protected java.lang.Object value(XContentParser parser) throws IOException {
+            if (parser.currentToken() == XContentParser.Token.VALUE_STRING) {
+                return parser.text();
+            }
+            if (parser.currentToken() == XContentParser.Token.VALUE_NUMBER) {
+                return parser.numberValue();
+            }
+            if (parser.currentToken() == XContentParser.Token.VALUE_BOOLEAN) {
+                return parser.booleanValue();
+            }
+            return null; // null value
+        }
+
+        protected boolean isString(XContentParser.Token token) {
+            return token == XContentParser.Token.VALUE_STRING;
+        }
+
+        protected boolean isBoolean(XContentParser.Token token) {
+            return token == XContentParser.Token.VALUE_BOOLEAN;
+        }
+
+        protected boolean isNumber(XContentParser.Token token) {
+            return token == XContentParser.Token.VALUE_NUMBER;
+        }
+
+        protected boolean isNull(XContentParser.Token token) {
+            return token == XContentParser.Token.VALUE_NULL;
+        }
+
+        protected boolean onObjectStart(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            return false;
+        }
+
+        protected boolean onObjectEnd(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            return false;
+        }
+
+        protected boolean onArrayStart(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            return false;
+        }
+
+        protected boolean onArrayEnd(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            return false;
+        }
+
+        protected boolean onValue(String name, XContentParser.Token token, XContentParser parser) throws IOException {
+            return false;
         }
     }
 
-    private static class Consumer extends AbstractCallback {
+    protected final Consumer<T> consumer;
 
-        protected final Callback[] callbacks;
+    private XContentPushParser(Callback<T> callback) {
+        this.consumer = new Consumer<T>(callback);
+    }
 
-        private Consumer(Callback[] callbacks) {
-            this.callbacks = callbacks;
+    public abstract T parse(XContentParser parser) throws IOException;
+
+    public static <T> XContentPushParser<T> object(Callback<T> callback) {
+        return new Object<T>(callback);
+    }
+
+    public static <T> XContentPushParser<T> array(Callback<T> callback) {
+        return new Array<T>(callback);
+    }
+
+    private static class Object<T> extends XContentPushParser<T> {
+
+        private Object(Callback<T> callback) {
+            super(callback);
+        }
+
+        public T parse(XContentParser parser) throws IOException {
+            XContentParser.Token token;
+            while ((token = parser.nextToken()) != XContentParser.Token.END_OBJECT || !consumer.currentRoot()) {
+                consumer.on(token, parser);
+            }
+            return consumer.process();
+        }
+    }
+
+    private static class Array<T> extends XContentPushParser<T> {
+
+        private Array(Callback<T> callback) {
+            super(callback);
+        }
+
+        public T parse(XContentParser parser) throws IOException {
+            XContentParser.Token token;
+            while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY || !consumer.currentRoot()) {
+                consumer.on(token, parser);
+            }
+            return consumer.process();
+        }
+    }
+
+    private static class Consumer<T> extends AbstractCallback<T> {
+
+        protected final Callback<T> callback;
+
+        private Consumer(Callback<T> callback) {
+            this.callback = callback;
         }
 
         @Override
-        public void on(XContentParser.Token token, XContentParser parser) throws IOException {
+        public boolean on(XContentParser.Token token, XContentParser parser) throws IOException {
             super.on(token, parser);
-            for (int i = 0; i < callbacks.length; i++) {
-                callbacks[i].on(token, parser);
-            }
+            return callback.on(token, parser);
         }
 
-        private boolean consumed() {
-            return objects.size() == 0 && arrays.size() == 0;
+        @Override
+        public T process() {
+            return callback.process();
         }
     }
-
-//
-//    public static void main(String[] args) throws Exception {
-//
-//        TokenCallback p1 = new AbstractTokenCallback() {
-//
-//            int indent = 0;
-//
-//            String indent(String text) {
-//                StringBuilder sb = new StringBuilder();
-//                for (int i = 0; i < indent; i++) {
-//                    sb.append("\t");
-//                }
-//                return sb.append(text).toString();
-//            }
-//
-//            @Override
-//            void onObjectStart(String name, XContentParser.Token token, XContentParser parser) throws IOException {
-//                System.out.println(indent("Start Object: " + name));
-//                indent++;
-//            }
-//
-//            @Override
-//            void onObjectEnd(String name, XContentParser.Token token, XContentParser parser) throws IOException {
-//                indent--;
-//                System.out.println(indent("End Object: " + name));
-//            }
-//
-//            @Override
-//            void onArrayStart(String name, XContentParser.Token token, XContentParser parser) throws IOException {
-//                System.out.println(indent("Start Array: " + name));
-//                indent++;
-//            }
-//
-//            @Override
-//            void onArrayEnd(String name, XContentParser.Token token, XContentParser parser) throws IOException {
-//                indent--;
-//                System.out.println(indent("End Array: " + name));
-//            }
-//
-//            @Override
-//            void onValue(String name, XContentParser.Token token, XContentParser parser) throws IOException {
-//                System.out.println(indent(name + " = " + parser.text()));
-//            }
-//        };
-//        InputStream in = null;
-//        try {
-//            in = XContentPushParser.class.getResourceAsStream("/state.json");
-//            XContentParser xcp = new JsonXContentParser(new JsonFactory().createParser(in));
-//            XContentPushParser parser = XContentPushParser.object().add(p1).build();
-//            parser.parse(xcp);
-//
-//        } finally {
-//            in.close();
-//        }
-//
-//    }
-
 }
