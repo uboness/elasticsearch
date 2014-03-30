@@ -20,9 +20,9 @@ package org.elasticsearch.search.aggregations.bucket.histogram;
 
 import com.carrotsearch.hppc.ObjectObjectOpenHashMap;
 import org.elasticsearch.common.io.stream.StreamInput;
-import org.elasticsearch.index.mapper.core.DateFieldMapper;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
@@ -87,9 +87,9 @@ public class InternalDateHistogram extends InternalHistogram<InternalDateHistogr
         }
 
         @Override
-        public InternalDateHistogram create(String name, List<InternalDateHistogram.Bucket> buckets, InternalOrder order,
+        public InternalDateHistogram create(String name, TrackingInfo info, List<InternalDateHistogram.Bucket> buckets, InternalOrder order,
                                             long minDocCount, EmptyBucketInfo emptyBucketInfo, ValueFormatter formatter, boolean keyed) {
-            return new InternalDateHistogram(name, buckets, order, minDocCount, emptyBucketInfo, formatter, keyed);
+            return new InternalDateHistogram(name, info, buckets, order, minDocCount, emptyBucketInfo, formatter, keyed);
         }
 
         @Override
@@ -102,9 +102,9 @@ public class InternalDateHistogram extends InternalHistogram<InternalDateHistogr
 
     InternalDateHistogram() {} // for serialization
 
-    InternalDateHistogram(String name, List<InternalDateHistogram.Bucket> buckets, InternalOrder order, long minDocCount,
+    InternalDateHistogram(String name, TrackingInfo info, List<Bucket> buckets, InternalOrder order, long minDocCount,
                           EmptyBucketInfo emptyBucketInfo, ValueFormatter formatter, boolean keyed) {
-        super(name, buckets, order, minDocCount, emptyBucketInfo, formatter, keyed);
+        super(name, info, buckets, order, minDocCount, emptyBucketInfo, formatter, keyed);
     }
 
     @Override
@@ -140,7 +140,7 @@ public class InternalDateHistogram extends InternalHistogram<InternalDateHistogr
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
+    public void internalReadFrom(StreamInput in) throws IOException {
         super.readFrom(in);
         bucketsMap = null; // we need to reset this on read (as it's lazily created on demand)
     }

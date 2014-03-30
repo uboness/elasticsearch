@@ -22,6 +22,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationStreams;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -54,7 +55,7 @@ public class UnmappedTerms extends InternalTerms {
     UnmappedTerms() {} // for serialization
 
     public UnmappedTerms(String name, InternalOrder order, int requiredSize, long minDocCount) {
-        super(name, order, requiredSize, minDocCount, BUCKETS);
+        super(name, TrackingInfo.EMPTY, order, requiredSize, minDocCount, BUCKETS);
     }
 
     @Override
@@ -63,29 +64,18 @@ public class UnmappedTerms extends InternalTerms {
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.name = in.readString();
-        this.order = InternalOrder.Streams.readOrder(in);
-        this.requiredSize = readSize(in);
-        this.minDocCount = in.readVLong();
-        this.buckets = BUCKETS;
-        this.bucketMap = BUCKETS_MAP;
+    public Collection<Bucket> readBucketsFrom(StreamInput in) throws IOException {
+        return BUCKETS;
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
-        InternalOrder.Streams.writeOrder(order, out);
-        writeSize(requiredSize, out);
-        out.writeVLong(minDocCount);
+    public void writeBucketsTo(StreamOutput out, Collection<Bucket> buckets) throws IOException {
+        assert buckets == BUCKETS;
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startArray(CommonFields.BUCKETS).endArray();
-        builder.endObject();
-        return builder;
     }
 
 }

@@ -32,6 +32,8 @@ import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
+import org.elasticsearch.search.aggregations.bucket.InternalMultiBucketsAggregation;
 
 import java.io.IOException;
 import java.util.*;
@@ -41,7 +43,7 @@ import java.util.*;
  * All geohashes in a grid are of the same precision and held internally as a single long
  * for efficiency's sake.
  */
-public class InternalGeoHashGrid extends InternalAggregation implements GeoHashGrid {
+public class InternalGeoHashGrid extends InternalMultiBucketsAggregation implements GeoHashGrid {
 
     public static final Type TYPE = new Type("geohash_grid", "ghcells");
 
@@ -140,8 +142,8 @@ public class InternalGeoHashGrid extends InternalAggregation implements GeoHashG
     InternalGeoHashGrid() {
     } // for serialization
 
-    public InternalGeoHashGrid(String name, int requiredSize, Collection<Bucket> buckets) {
-        super(name);
+    public InternalGeoHashGrid(String name, TrackingInfo info, int requiredSize, Collection<Bucket> buckets) {
+        super(name, info);
         this.requiredSize = requiredSize;
         this.buckets = buckets;
     }
@@ -193,6 +195,11 @@ public class InternalGeoHashGrid extends InternalAggregation implements GeoHashG
             InternalGeoHashGrid grid = (InternalGeoHashGrid) aggregation;
             if (reduced == null) {
                 reduced = grid;
+            }
+            if (reduced.info == null) {
+                reduced.info = grid.info;
+            } else {
+                reduced.info.add(grid.info);
             }
             if (buckets == null) {
                 buckets = new LongObjectPagedHashMap<>(grid.buckets.size(), reduceContext.bigArrays());
@@ -249,8 +256,7 @@ public class InternalGeoHashGrid extends InternalAggregation implements GeoHashG
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.name = in.readString();
+    public void internalReadFrom(StreamInput in) throws IOException {
         this.requiredSize = readSize(in);
         int size = in.readVInt();
         List<Bucket> buckets = new ArrayList<>(size);
@@ -262,8 +268,7 @@ public class InternalGeoHashGrid extends InternalAggregation implements GeoHashG
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
+    public void internalWriteTo(StreamOutput out) throws IOException {
         writeSize(requiredSize, out);
         out.writeVInt(buckets.size());
         for (Bucket bucket : buckets) {
@@ -274,8 +279,7 @@ public class InternalGeoHashGrid extends InternalAggregation implements GeoHashG
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startArray(CommonFields.BUCKETS);
         for (Bucket bucket : buckets) {
             builder.startObject();
@@ -285,8 +289,6 @@ public class InternalGeoHashGrid extends InternalAggregation implements GeoHashG
             builder.endObject();
         }
         builder.endArray();
-        builder.endObject();
-        return builder;
     }
 
     static class BucketPriorityQueue extends PriorityQueue<Bucket> {

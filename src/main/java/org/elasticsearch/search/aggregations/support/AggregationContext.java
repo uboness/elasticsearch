@@ -138,10 +138,16 @@ public class AggregationContext implements ReaderContextAware, ScorerAware {
 
     private ValuesSource.Numeric numericField(ObjectObjectOpenHashMap<ConfigCacheKey, ValuesSource> fieldDataSources, ValuesSourceConfig<?> config) {
         final ConfigCacheKey cacheKey = new ConfigCacheKey(config);
-        ValuesSource.Numeric dataSource = (ValuesSource.Numeric) fieldDataSources.get(cacheKey);
+        ValuesSource.Numeric dataSource = (ValuesSource.Numeric.FieldData) fieldDataSources.get(cacheKey);
         if (dataSource == null) {
             ValuesSource.MetaData metaData = ValuesSource.MetaData.load(config.fieldContext.indexFieldData(), searchContext);
             dataSource = new ValuesSource.Numeric.FieldData((IndexNumericFieldData<?>) config.fieldContext.indexFieldData(), metaData);
+            if (config.trackDocs) {
+                dataSource = new TrackingValuesSource.Numeric(dataSource);
+            }
+            if (config.defaultValues != null) {
+                dataSource = new DefaultsValuesSource.Numeric(dataSource, config.defaultValues);
+            }
             setReaderIfNeeded((ReaderContextAware) dataSource);
             readerAwares.add((ReaderContextAware) dataSource);
             fieldDataSources.put(cacheKey, dataSource);
@@ -174,6 +180,12 @@ public class AggregationContext implements ReaderContextAware, ScorerAware {
                 dataSource = new ValuesSource.Bytes.WithOrdinals.FieldData((IndexFieldData.WithOrdinals) indexFieldData, metaData);
             } else {
                 dataSource = new ValuesSource.Bytes.FieldData(indexFieldData, metaData);
+            }
+            if (config.trackDocs) {
+                dataSource = new TrackingValuesSource.Bytes(dataSource);
+            }
+            if (config.defaultValues != null) {
+                dataSource = new DefaultsValuesSource.Bytes(dataSource, config.defaultValues);
             }
             setReaderIfNeeded((ReaderContextAware) dataSource);
             readerAwares.add((ReaderContextAware) dataSource);
@@ -218,9 +230,15 @@ public class AggregationContext implements ReaderContextAware, ScorerAware {
         ValuesSource.GeoPoint dataSource = (ValuesSource.GeoPoint) fieldDataSources.get(cacheKey);
         if (dataSource == null) {
             ValuesSource.MetaData metaData = ValuesSource.MetaData.load(config.fieldContext.indexFieldData(), searchContext);
-            dataSource = new ValuesSource.GeoPoint((IndexGeoPointFieldData<?>) config.fieldContext.indexFieldData(), metaData);
-            setReaderIfNeeded(dataSource);
-            readerAwares.add(dataSource);
+            dataSource = new ValuesSource.GeoPoint.FieldData((IndexGeoPointFieldData<?>) config.fieldContext.indexFieldData(), metaData);
+            if (config.trackDocs) {
+                dataSource = new TrackingValuesSource.GeoPoint(dataSource);
+            }
+            if (config.defaultValues != null) {
+                dataSource = new DefaultsValuesSource.GeoPoint(dataSource, config.defaultValues);
+            }
+            setReaderIfNeeded((ReaderContextAware) dataSource);
+            readerAwares.add((ReaderContextAware) dataSource);
             fieldDataSources.put(cacheKey, dataSource);
         }
         if (config.needsHashes) {

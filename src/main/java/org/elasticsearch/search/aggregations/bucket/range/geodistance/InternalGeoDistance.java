@@ -22,6 +22,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.range.InternalRange;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 
@@ -70,8 +71,8 @@ public class InternalGeoDistance extends InternalRange<InternalGeoDistance.Bucke
         }
 
         @Override
-        public InternalGeoDistance create(String name, List<Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
-            return new InternalGeoDistance(name, ranges, formatter, keyed, unmapped);
+        public InternalGeoDistance create(String name, TrackingInfo info, List<Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
+            return new InternalGeoDistance(name, info, ranges, formatter, keyed, unmapped);
         }
 
         @Override
@@ -82,8 +83,8 @@ public class InternalGeoDistance extends InternalRange<InternalGeoDistance.Bucke
 
     InternalGeoDistance() {} // for serialization
 
-    public InternalGeoDistance(String name, List<Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
-        super(name, ranges, formatter, keyed, unmapped);
+    public InternalGeoDistance(String name, TrackingInfo info, List<Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
+        super(name, info, ranges, formatter, keyed, unmapped);
     }
 
     @Override

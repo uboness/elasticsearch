@@ -33,7 +33,6 @@ import java.util.Collection;
  */
 public interface MultiBucketsAggregation extends Aggregation {
 
-
     /**
      * A bucket represents a criteria to which all documents that fall in it adhere to. It is also uniquely identified
      * by a key, and can potentially hold sub-aggregations computed over all documents in it.
@@ -86,6 +85,8 @@ public interface MultiBucketsAggregation extends Aggregation {
             }
         }
     }
+
+    TrackingInfo getBucketsInfo();
 
     /**
      * @return  The buckets of this aggregation.

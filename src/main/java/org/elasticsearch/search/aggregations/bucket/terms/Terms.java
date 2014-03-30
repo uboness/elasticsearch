@@ -20,6 +20,7 @@ package org.elasticsearch.search.aggregations.bucket.terms;
 
 import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.search.aggregations.Aggregator;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
 import org.elasticsearch.search.aggregations.support.ScriptValueType;
 
@@ -67,7 +68,13 @@ public interface Terms extends MultiBucketsAggregation {
 
         abstract int compareTerm(Terms.Bucket other);
 
+        @Override
+        public String toString() {
+            return getKey();
+        }
     }
+
+    TrackingInfo getBucketsInfo();
 
     Collection<Bucket> getBuckets();
 

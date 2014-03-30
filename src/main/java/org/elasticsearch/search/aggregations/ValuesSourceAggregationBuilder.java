@@ -21,8 +21,11 @@ package org.elasticsearch.search.aggregations;
 
 import com.google.common.collect.Maps;
 import org.elasticsearch.common.xcontent.XContentBuilder;
+import org.elasticsearch.search.aggregations.support.DefaultValues;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,6 +37,8 @@ public abstract class ValuesSourceAggregationBuilder<B extends ValuesSourceAggre
     private String script;
     private String lang;
     private Map<String, Object> params;
+    private Boolean trackDocs;
+    private DefaultValues defaultValues;
 
     /**
      * Constructs a new builder.
@@ -102,6 +107,16 @@ public abstract class ValuesSourceAggregationBuilder<B extends ValuesSourceAggre
         return (B) this;
     }
 
+    public B trackDocs(boolean trackDocs) {
+        this.trackDocs = trackDocs;
+        return (B) this;
+    }
+
+    public B defaultValues(Object... values) {
+        defaultValues = new DefaultValues(values);
+        return (B) this;
+    }
+
     /**
      * Sets the values of a parameters that are used in the script (if one is configured).
      *
@@ -131,6 +146,12 @@ public abstract class ValuesSourceAggregationBuilder<B extends ValuesSourceAggre
         }
         if (this.params != null) {
             builder.field("params").map(this.params);
+        }
+        if (this.trackDocs != null) {
+            builder.field("track_docs", trackDocs);
+        }
+        if (this.defaultValues != null) {
+            builder.array("default_values", defaultValues.values());
         }
 
         doInternalXContent(builder, params);

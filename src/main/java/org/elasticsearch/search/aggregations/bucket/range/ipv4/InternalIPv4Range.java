@@ -22,6 +22,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.range.InternalRange;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 
@@ -83,8 +84,8 @@ public class InternalIPv4Range extends InternalRange<InternalIPv4Range.Bucket> i
         }
 
         @Override
-        public InternalIPv4Range create(String name, List<Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
-            return new InternalIPv4Range(name, ranges, keyed, unmapped);
+        public InternalIPv4Range create(String name, TrackingInfo info, List<Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
+            return new InternalIPv4Range(name, info, ranges, keyed, unmapped);
         }
 
         @Override
@@ -95,8 +96,8 @@ public class InternalIPv4Range extends InternalRange<InternalIPv4Range.Bucket> i
 
     public InternalIPv4Range() {} // for serialization
 
-    public InternalIPv4Range(String name, List<InternalIPv4Range.Bucket> ranges, boolean keyed, boolean unmapped) {
-        super(name, ranges, ValueFormatter.IPv4, keyed, unmapped);
+    public InternalIPv4Range(String name, TrackingInfo info, List<Bucket> ranges, boolean keyed, boolean unmapped) {
+        super(name, info, ranges, ValueFormatter.IPv4, keyed, unmapped);
     }
 
     @Override

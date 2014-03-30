@@ -48,11 +48,21 @@ public abstract class ValuesSource {
             public boolean unique() {
                 return this == UNIQUE;
             }
+
+            public Uniqueness and(Uniqueness uniqueness) {
+                if (this == UNIQUE && uniqueness == UNIQUE) {
+                    return UNIQUE;
+                }
+                if (this == UNKNOWN || uniqueness == UNKNOWN) {
+                    return UNKNOWN;
+                }
+                return NOT_UNIQUE;
+            }
         }
 
-        private long maxAtomicUniqueValuesCount = -1;
-        private boolean multiValued = true;
-        private Uniqueness uniqueness = Uniqueness.UNKNOWN;
+        long maxAtomicUniqueValuesCount = -1;
+        boolean multiValued = true;
+        Uniqueness uniqueness = Uniqueness.UNKNOWN;
 
         private MetaData() {}
 
@@ -757,55 +767,60 @@ public abstract class ValuesSource {
         }
     }
 
-    public static class GeoPoint extends ValuesSource implements ReaderContextAware {
+    public static abstract class GeoPoint extends ValuesSource {
 
-        protected boolean needsHashes;
-        protected final IndexGeoPointFieldData<?> indexFieldData;
-        private final MetaData metaData;
-        protected AtomicGeoPointFieldData<?> atomicFieldData;
-        private BytesValues bytesValues;
-        private GeoPointValues geoPointValues;
+        public abstract org.elasticsearch.index.fielddata.GeoPointValues geoPointValues();
 
-        public GeoPoint(IndexGeoPointFieldData<?> indexFieldData, MetaData metaData) {
-            this.indexFieldData = indexFieldData;
-            this.metaData = metaData;
-            needsHashes = false;
-        }
+        public static class FieldData extends GeoPoint implements ReaderContextAware {
 
-        @Override
-        public MetaData metaData() {
-            return metaData;
-        }
+            protected boolean needsHashes;
+            protected final IndexGeoPointFieldData<?> indexFieldData;
+            private final MetaData metaData;
+            protected AtomicGeoPointFieldData<?> atomicFieldData;
+            private BytesValues bytesValues;
+            private GeoPointValues geoPointValues;
 
-        @Override
-        public final void setNeedsHashes(boolean needsHashes) {
-            this.needsHashes = needsHashes;
-        }
-
-        @Override
-        public void setNextReader(AtomicReaderContext reader) {
-            atomicFieldData = indexFieldData.load(reader);
-            if (bytesValues != null) {
-                bytesValues = atomicFieldData.getBytesValues(needsHashes);
+            public FieldData(IndexGeoPointFieldData<?> indexFieldData, MetaData metaData) {
+                this.indexFieldData = indexFieldData;
+                this.metaData = metaData;
+                needsHashes = false;
             }
-            if (geoPointValues != null) {
-                geoPointValues = atomicFieldData.getGeoPointValues();
-            }
-        }
 
-        @Override
-        public org.elasticsearch.index.fielddata.BytesValues bytesValues() {
-            if (bytesValues == null) {
-                bytesValues = atomicFieldData.getBytesValues(needsHashes);
+            @Override
+            public MetaData metaData() {
+                return metaData;
             }
-            return bytesValues;
-        }
 
-        public org.elasticsearch.index.fielddata.GeoPointValues geoPointValues() {
-            if (geoPointValues == null) {
-                geoPointValues = atomicFieldData.getGeoPointValues();
+            @Override
+            public final void setNeedsHashes(boolean needsHashes) {
+                this.needsHashes = needsHashes;
             }
-            return geoPointValues;
+
+            @Override
+            public void setNextReader(AtomicReaderContext reader) {
+                atomicFieldData = indexFieldData.load(reader);
+                if (bytesValues != null) {
+                    bytesValues = atomicFieldData.getBytesValues(needsHashes);
+                }
+                if (geoPointValues != null) {
+                    geoPointValues = atomicFieldData.getGeoPointValues();
+                }
+            }
+
+            @Override
+            public org.elasticsearch.index.fielddata.BytesValues bytesValues() {
+                if (bytesValues == null) {
+                    bytesValues = atomicFieldData.getBytesValues(needsHashes);
+                }
+                return bytesValues;
+            }
+
+            public org.elasticsearch.index.fielddata.GeoPointValues geoPointValues() {
+                if (geoPointValues == null) {
+                    geoPointValues = atomicFieldData.getGeoPointValues();
+                }
+                return geoPointValues;
+            }
         }
     }
 

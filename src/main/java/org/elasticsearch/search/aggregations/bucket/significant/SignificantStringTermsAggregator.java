@@ -28,6 +28,7 @@ import org.elasticsearch.index.fielddata.BytesValues;
 import org.elasticsearch.index.fielddata.ordinals.Ordinals;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.terms.StringTermsAggregator;
 import org.elasticsearch.search.aggregations.bucket.terms.support.IncludeExclude;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
@@ -102,7 +103,9 @@ public class SignificantStringTermsAggregator extends StringTermsAggregator {
             list[i] = bucket;
         }
 
-        return new SignificantStringTerms(subsetSize, supersetSize, name, requiredSize, minDocCount, Arrays.asList(list));
+        TrackingInfo info = TrackingInfo.resolve(valuesSource);
+
+        return new SignificantStringTerms(name, info, subsetSize, supersetSize, requiredSize, minDocCount, Arrays.asList(list));
     }
 
     @Override
@@ -111,7 +114,7 @@ public class SignificantStringTermsAggregator extends StringTermsAggregator {
         ContextIndexSearcher searcher = context.searchContext().searcher();
         IndexReader topReader = searcher.getIndexReader();
         int supersetSize = topReader.numDocs();
-        return new SignificantStringTerms(0, supersetSize, name, requiredSize, minDocCount, Collections.<InternalSignificantTerms.Bucket>emptyList());
+        return new SignificantStringTerms(name, TrackingInfo.EMPTY, 0, supersetSize, requiredSize, minDocCount, Collections.<InternalSignificantTerms.Bucket>emptyList());
     }
 
     @Override

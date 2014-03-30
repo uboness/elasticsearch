@@ -33,6 +33,8 @@ public class ValuesSourceConfig<VS extends ValuesSource> {
     boolean needsHashes = false;
     boolean ensureUnique = false;
     boolean ensureSorted = false;
+    boolean trackDocs = false;
+    DefaultValues defaultValues = null;
 
     public ValuesSourceConfig(Class<VS> valueSourceType) {
         this.valueSourceType = valueSourceType;
@@ -92,4 +94,15 @@ public class ValuesSourceConfig<VS extends ValuesSource> {
         this.ensureSorted = sorted;
         return this;
     }
+
+    public ValuesSourceConfig<VS> trackDocs(Boolean trackDocs) {
+        this.trackDocs = trackDocs != null && trackDocs;
+        return this;
+    }
+
+    public ValuesSourceConfig<VS> defaultValues(DefaultValues defaultValues) {
+        this.defaultValues = defaultValues;
+        return this;
+    }
+
 }

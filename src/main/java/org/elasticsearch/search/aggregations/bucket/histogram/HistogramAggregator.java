@@ -28,6 +28,7 @@ import org.elasticsearch.index.fielddata.LongValues;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.InternalAggregation;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.BucketsAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
@@ -124,13 +125,16 @@ public class HistogramAggregator extends BucketsAggregator {
 
         // value source will be null for unmapped fields
         InternalHistogram.EmptyBucketInfo emptyBucketInfo = minDocCount == 0 ? new InternalHistogram.EmptyBucketInfo(rounding, buildEmptySubAggregations(), extendedBounds) : null;
-        return histogramFactory.create(name, buckets, order, minDocCount, emptyBucketInfo, formatter, keyed);
+
+        TrackingInfo info = TrackingInfo.resolve(valuesSource);
+
+        return histogramFactory.create(name, info, buckets, order, minDocCount, emptyBucketInfo, formatter, keyed);
     }
 
     @Override
     public InternalAggregation buildEmptyAggregation() {
         InternalHistogram.EmptyBucketInfo emptyBucketInfo = minDocCount == 0 ? new InternalHistogram.EmptyBucketInfo(rounding, buildEmptySubAggregations(), extendedBounds) : null;
-        return histogramFactory.create(name, Collections.emptyList(), order, minDocCount, emptyBucketInfo, formatter, keyed);
+        return histogramFactory.create(name, TrackingInfo.EMPTY, Collections.emptyList(), order, minDocCount, emptyBucketInfo, formatter, keyed);
     }
 
     @Override

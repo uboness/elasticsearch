@@ -24,6 +24,7 @@ import org.apache.lucene.util.InPlaceMergeSorter;
 import org.elasticsearch.index.fielddata.DoubleValues;
 import org.elasticsearch.search.aggregations.*;
 import org.elasticsearch.search.aggregations.bucket.BucketsAggregator;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
 import org.elasticsearch.search.aggregations.support.ValuesSourceAggregatorFactory;
@@ -197,8 +198,11 @@ public class RangeAggregator extends BucketsAggregator {
                     range.key, range.from, range.to, bucketDocCount(bucketOrd),bucketAggregations(bucketOrd), formatter);
             buckets.add(bucket);
         }
+
+        TrackingInfo info = TrackingInfo.resolve(valuesSource);
+
         // value source can be null in the case of unmapped fields
-        return rangeFactory.create(name, buckets, formatter, keyed, false);
+        return rangeFactory.create(name, info, buckets, formatter, keyed, false);
     }
 
     @Override
@@ -212,7 +216,7 @@ public class RangeAggregator extends BucketsAggregator {
             buckets.add(bucket);
         }
         // value source can be null in the case of unmapped fields
-        return rangeFactory.create(name, buckets, formatter, keyed, false);
+        return rangeFactory.create(name, TrackingInfo.EMPTY, buckets, formatter, keyed, false);
     }
 
     private static final void sortRanges(final Range[] ranges) {
@@ -272,7 +276,7 @@ public class RangeAggregator extends BucketsAggregator {
             for (RangeAggregator.Range range : ranges) {
                 buckets.add(factory.createBucket(range.key, range.from, range.to, 0, subAggs, formatter));
             }
-            return factory.create(name, buckets, formatter, keyed, true);
+            return factory.create(name, TrackingInfo.EMPTY, buckets, formatter, keyed, true);
         }
     }
 

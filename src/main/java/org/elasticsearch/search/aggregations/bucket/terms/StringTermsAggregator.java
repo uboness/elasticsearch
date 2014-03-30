@@ -35,6 +35,7 @@ import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.bucket.BucketsAggregator;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.terms.support.BucketPriorityQueue;
 import org.elasticsearch.search.aggregations.bucket.terms.support.IncludeExclude;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
@@ -48,7 +49,7 @@ import java.util.*;
  */
 public class StringTermsAggregator extends BucketsAggregator {
 
-    private final ValuesSource valuesSource;
+    protected final ValuesSource valuesSource;
     private final InternalOrder order;
     protected final int requiredSize;
     protected final int shardSize;
@@ -240,12 +241,14 @@ public class StringTermsAggregator extends BucketsAggregator {
             list[i] = bucket;
         }
 
-        return new StringTerms(name, order, requiredSize, minDocCount, Arrays.asList(list));
+        TrackingInfo info = TrackingInfo.resolve(valuesSource);
+
+        return new StringTerms(name, info, order, requiredSize, minDocCount, Arrays.asList(list));
     }
 
     @Override
     public InternalAggregation buildEmptyAggregation() {
-        return new StringTerms(name, order, requiredSize, minDocCount, Collections.<InternalTerms.Bucket>emptyList());
+        return new StringTerms(name, TrackingInfo.EMPTY, order, requiredSize, minDocCount, Collections.<InternalTerms.Bucket>emptyList());
     }
 
     @Override

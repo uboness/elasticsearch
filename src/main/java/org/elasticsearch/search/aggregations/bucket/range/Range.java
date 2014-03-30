@@ -18,7 +18,6 @@
  */
 package org.elasticsearch.search.aggregations.bucket.range;
 
-import org.elasticsearch.search.aggregations.Aggregation;
 import org.elasticsearch.search.aggregations.bucket.MultiBucketsAggregation;
 
 import java.util.Collection;

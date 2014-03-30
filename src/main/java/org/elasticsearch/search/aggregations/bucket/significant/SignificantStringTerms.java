@@ -28,6 +28,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -89,9 +90,9 @@ public class SignificantStringTerms extends InternalSignificantTerms {
 
     SignificantStringTerms() {} // for serialization
 
-    public SignificantStringTerms(long subsetSize, long supersetSize, String name, int requiredSize,
+    public SignificantStringTerms(String name, TrackingInfo info, long subsetSize, long supersetSize, int requiredSize,
             long minDocCount, Collection<InternalSignificantTerms.Bucket> buckets) {
-        super(subsetSize, supersetSize, name, requiredSize, minDocCount, buckets);
+        super(name, info, subsetSize, supersetSize, requiredSize, minDocCount, buckets);
     }
 
     @Override
@@ -100,8 +101,7 @@ public class SignificantStringTerms extends InternalSignificantTerms {
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.name = in.readString();
+    public void internalReadFrom(StreamInput in) throws IOException {
         this.requiredSize = readSize(in);
         this.minDocCount = in.readVLong();
         this.subsetSize = in.readVLong();
@@ -119,8 +119,7 @@ public class SignificantStringTerms extends InternalSignificantTerms {
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
+    public void internalWriteTo(StreamOutput out) throws IOException {
         writeSize(requiredSize, out);
         out.writeVLong(minDocCount);
         out.writeVLong(subsetSize);
@@ -135,8 +134,7 @@ public class SignificantStringTerms extends InternalSignificantTerms {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         builder.field("doc_count", subsetSize);
         builder.startArray(CommonFields.BUCKETS);
         for (InternalSignificantTerms.Bucket bucket : buckets) {
@@ -153,8 +151,6 @@ public class SignificantStringTerms extends InternalSignificantTerms {
             }
         }
         builder.endArray();
-        builder.endObject();
-        return builder;
     }
 
 }

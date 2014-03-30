@@ -27,9 +27,9 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.terms.support.BucketPriorityQueue;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
-import org.elasticsearch.search.aggregations.support.format.ValueFormatterStreams;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -92,8 +92,8 @@ public class LongTerms extends InternalTerms {
 
     LongTerms() {} // for serialization
 
-    public LongTerms(String name, InternalOrder order, ValueFormatter valueFormatter, int requiredSize, long minDocCount, Collection<InternalTerms.Bucket> buckets) {
-        super(name, order, requiredSize, minDocCount, buckets);
+    public LongTerms(String name, TrackingInfo info, InternalOrder order, ValueFormatter valueFormatter, int requiredSize, long minDocCount, Collection<InternalTerms.Bucket> buckets) {
+        super(name, info, order, requiredSize, minDocCount, buckets);
         this.valueFormatter = valueFormatter;
     }
 
@@ -110,7 +110,8 @@ public class LongTerms extends InternalTerms {
             terms.trimExcessEntries(reduceContext.bigArrays());
             return terms;
         }
-        InternalTerms reduced = null;
+
+        LongTerms reduced = null;
 
         LongObjectPagedHashMap<List<Bucket>> buckets = null;
         for (InternalAggregation aggregation : aggregations) {
@@ -118,8 +119,14 @@ public class LongTerms extends InternalTerms {
             if (terms instanceof UnmappedTerms) {
                 continue;
             }
+            LongTerms lterms = (LongTerms) terms;
             if (reduced == null) {
-                reduced = terms;
+                reduced = lterms;
+            }
+            if (reduced.info == null) {
+                reduced.info = lterms.info;
+            } else {
+                reduced.info.add(lterms.info);
             }
             if (buckets == null) {
                 buckets = new LongObjectPagedHashMap<>(terms.buckets.size(), reduceContext.bigArrays());
@@ -159,28 +166,17 @@ public class LongTerms extends InternalTerms {
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.name = in.readString();
-        this.order = InternalOrder.Streams.readOrder(in);
-        this.valueFormatter = ValueFormatterStreams.readOptional(in);
-        this.requiredSize = readSize(in);
-        this.minDocCount = in.readVLong();
+    public Collection<InternalTerms.Bucket> readBucketsFrom(StreamInput in) throws IOException {
         int size = in.readVInt();
         List<InternalTerms.Bucket> buckets = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             buckets.add(new Bucket(in.readLong(), in.readVLong(), InternalAggregations.readAggregations(in)));
         }
-        this.buckets = buckets;
-        this.bucketMap = null;
+        return buckets;
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
-        InternalOrder.Streams.writeOrder(order, out);
-        ValueFormatterStreams.writeOptional(valueFormatter, out);
-        writeSize(requiredSize, out);
-        out.writeVLong(minDocCount);
+    public void writeBucketsTo(StreamOutput out, Collection<InternalTerms.Bucket> buckets) throws IOException {
         out.writeVInt(buckets.size());
         for (InternalTerms.Bucket bucket : buckets) {
             out.writeLong(((Bucket) bucket).term);
@@ -190,8 +186,7 @@ public class LongTerms extends InternalTerms {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startArray(CommonFields.BUCKETS);
         for (InternalTerms.Bucket bucket : buckets) {
             builder.startObject();
@@ -204,8 +199,6 @@ public class LongTerms extends InternalTerms {
             builder.endObject();
         }
         builder.endArray();
-        builder.endObject();
-        return builder;
     }
 
 }

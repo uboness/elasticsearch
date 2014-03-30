@@ -22,6 +22,7 @@ import org.apache.lucene.index.IndexReader;
 import org.elasticsearch.common.lease.Releasables;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.terms.LongTermsAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
@@ -95,8 +96,10 @@ public class SignificantLongTermsAggregator extends LongTermsAggregator {
             bucket.aggregations = bucketAggregations(bucket.bucketOrd);
             list[i] = bucket;
         }
-        return new SignificantLongTerms(subsetSize, supersetSize, name, formatter, requiredSize, minDocCount,
-                Arrays.asList(list));
+
+        TrackingInfo info = TrackingInfo.resolve(valuesSource);
+
+        return new SignificantLongTerms(name, info, subsetSize, supersetSize, formatter, requiredSize, minDocCount, Arrays.asList(list));
     }
 
     @Override
@@ -105,7 +108,7 @@ public class SignificantLongTermsAggregator extends LongTermsAggregator {
         ContextIndexSearcher searcher = context.searchContext().searcher();
         IndexReader topReader = searcher.getIndexReader();
         int supersetSize = topReader.numDocs();
-        return new SignificantLongTerms(0, supersetSize, name, formatter, requiredSize, minDocCount, Collections.<InternalSignificantTerms.Bucket>emptyList());
+        return new SignificantLongTerms(name, TrackingInfo.EMPTY, 0, supersetSize, formatter, requiredSize, minDocCount, Collections.<InternalSignificantTerms.Bucket>emptyList());
     }
 
     @Override

@@ -27,9 +27,9 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.terms.support.BucketPriorityQueue;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
-import org.elasticsearch.search.aggregations.support.format.ValueFormatterStreams;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -92,12 +92,12 @@ public class DoubleTerms extends InternalTerms {
 
     DoubleTerms() {} // for serialization
 
-    public DoubleTerms(String name, InternalOrder order, int requiredSize, long minDocCount, Collection<InternalTerms.Bucket> buckets) {
-        this(name, order, null, requiredSize, minDocCount, buckets);
+    public DoubleTerms(String name, TrackingInfo info, InternalOrder order, int requiredSize, long minDocCount, Collection<InternalTerms.Bucket> buckets) {
+        this(name, info, order, null, requiredSize, minDocCount, buckets);
     }
 
-    public DoubleTerms(String name, InternalOrder order, ValueFormatter valueFormatter, int requiredSize, long minDocCount, Collection<InternalTerms.Bucket> buckets) {
-        super(name, order, requiredSize, minDocCount, buckets);
+    public DoubleTerms(String name, TrackingInfo info, InternalOrder order, ValueFormatter valueFormatter, int requiredSize, long minDocCount, Collection<InternalTerms.Bucket> buckets) {
+        super(name, info, order, requiredSize, minDocCount, buckets);
         this.valueFormatter = valueFormatter;
     }
 
@@ -114,7 +114,8 @@ public class DoubleTerms extends InternalTerms {
             terms.trimExcessEntries(reduceContext.bigArrays());
             return terms;
         }
-        InternalTerms reduced = null;
+
+        DoubleTerms reduced = null;
 
         DoubleObjectPagedHashMap<List<Bucket>> buckets = null;
         for (InternalAggregation aggregation : aggregations) {
@@ -122,13 +123,20 @@ public class DoubleTerms extends InternalTerms {
             if (terms instanceof UnmappedTerms) {
                 continue;
             }
+            DoubleTerms dterms = (DoubleTerms) terms;
             if (reduced == null) {
-                reduced = terms;
+                reduced = dterms;
             }
+            if (reduced.info == null) {
+                reduced.info = dterms.info;
+            } else {
+                reduced.info.add(dterms.info);
+            }
+
             if (buckets == null) {
                 buckets = new DoubleObjectPagedHashMap<>(terms.buckets.size(), reduceContext.bigArrays());
             }
-            for (Terms.Bucket bucket : terms.buckets) {
+            for (Terms.Bucket bucket : dterms.buckets) {
                 List<Bucket> existingBuckets = buckets.get(((Bucket) bucket).term);
                 if (existingBuckets == null) {
                     existingBuckets = new ArrayList<>(aggregations.size());
@@ -163,28 +171,17 @@ public class DoubleTerms extends InternalTerms {
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.name = in.readString();
-        this.order = InternalOrder.Streams.readOrder(in);
-        this.valueFormatter = ValueFormatterStreams.readOptional(in);
-        this.requiredSize = readSize(in);
-        this.minDocCount = in.readVLong();
+    public Collection<InternalTerms.Bucket> readBucketsFrom(StreamInput in) throws IOException {
         int size = in.readVInt();
         List<InternalTerms.Bucket> buckets = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             buckets.add(new Bucket(in.readDouble(), in.readVLong(), InternalAggregations.readAggregations(in)));
         }
-        this.buckets = buckets;
-        this.bucketMap = null;
+        return buckets;
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
-        InternalOrder.Streams.writeOrder(order, out);
-        ValueFormatterStreams.writeOptional(valueFormatter, out);
-        writeSize(requiredSize, out);
-        out.writeVLong(minDocCount);
+    public void writeBucketsTo(StreamOutput out, Collection<InternalTerms.Bucket> buckets) throws IOException {
         out.writeVInt(buckets.size());
         for (InternalTerms.Bucket bucket : buckets) {
             out.writeDouble(((Bucket) bucket).term);
@@ -194,8 +191,7 @@ public class DoubleTerms extends InternalTerms {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startArray(CommonFields.BUCKETS);
         for (InternalTerms.Bucket bucket : buckets) {
             builder.startObject();
@@ -208,8 +204,6 @@ public class DoubleTerms extends InternalTerms {
             builder.endObject();
         }
         builder.endArray();
-        builder.endObject();
-        return builder;
     }
 
 }

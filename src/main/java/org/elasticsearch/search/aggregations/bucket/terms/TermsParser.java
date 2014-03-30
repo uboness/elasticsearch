@@ -30,8 +30,9 @@ import org.elasticsearch.search.SearchParseException;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactory;
 import org.elasticsearch.search.aggregations.bucket.terms.support.IncludeExclude;
-import org.elasticsearch.search.aggregations.support.ValuesSource;
+import org.elasticsearch.search.aggregations.support.DefaultValues;
 import org.elasticsearch.search.aggregations.support.FieldContext;
+import org.elasticsearch.search.aggregations.support.ValuesSource;
 import org.elasticsearch.search.aggregations.support.ValuesSourceConfig;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 import org.elasticsearch.search.aggregations.support.format.ValueParser;
@@ -71,7 +72,8 @@ public class TermsParser implements Aggregator.Parser {
         int excludeFlags = 0; // 0 means no flags
         String executionHint = null;
         long minDocCount = 1;
-
+        Boolean tracDocs = null;
+        DefaultValues.Builder defaultValuesBuilder = null;
 
         XContentParser.Token token;
         String currentFieldName = null;
@@ -101,6 +103,8 @@ public class TermsParser implements Aggregator.Parser {
             } else if (token == XContentParser.Token.VALUE_BOOLEAN) {
                 if ("script_values_unique".equals(currentFieldName) || "scriptValuesUnique".equals(currentFieldName)) {
                     assumeUnique = parser.booleanValue();
+                } if ("track_docs".equals(currentFieldName) || "trackDocs".equals(currentFieldName)) {
+                    tracDocs = parser.booleanValue();
                 } else {
                     throw new SearchParseException(context, "Unknown key for a " + token + " in [" + aggregationName + "]: [" + currentFieldName + "].");
                 }
@@ -169,6 +173,19 @@ public class TermsParser implements Aggregator.Parser {
                 } else {
                     throw new SearchParseException(context, "Unknown key for a " + token + " in [" + aggregationName + "]: [" + currentFieldName + "].");
                 }
+            } else if (token == XContentParser.Token.START_ARRAY) {
+                if ("default_values".equals(currentFieldName) || "defaultValues".equals(currentFieldName)) {
+                    defaultValuesBuilder = DefaultValues.builder();
+                    while ((token = parser.nextToken()) != XContentParser.Token.END_ARRAY) {
+                        if (token.isValue()) {
+                            defaultValuesBuilder.value(parser.objectBytes());
+                        } else {
+                            throw new SearchParseException(context, "default values for [missing] settings in [" + aggregationName + "] cannot be objects or arrays");
+                        }
+                    }
+                } else {
+                    throw new SearchParseException(context, "Unknown key for a [" + token + "] in terms aggregation [" + aggregationName + "] under [missing] config: [" + currentFieldName + "]");
+                }
             } else {
                 throw new SearchParseException(context, "Unexpected token " + token + " in [" + aggregationName + "].");
             }
@@ -187,6 +204,8 @@ public class TermsParser implements Aggregator.Parser {
             shardSize = requiredSize;
         }
 
+        DefaultValues defaultValues = defaultValuesBuilder != null ? defaultValuesBuilder.build() : null;
+
         IncludeExclude includeExclude = null;
         if (include != null || exclude != null) {
             Pattern includePattern =  include != null ? Pattern.compile(include, includeFlags) : null;
@@ -202,12 +221,18 @@ public class TermsParser implements Aggregator.Parser {
 
         if (field == null) {
 
+            // we must have a field set in order to track missing to take effect, lets fail fast here to guide the user
+            if (tracDocs != null) {
+                throw new SearchParseException(context, "Missing configuration can only be applied for field value based aggregation [" + aggregationName + "]");
+            }
+
             Class<? extends ValuesSource> valueSourceType = script == null ?
                     ValuesSource.class : // unknown, will inherit whatever is in the context
                     valueType != null ? valueType.scriptValueType.getValuesSourceType() : // the user explicitly defined a value type
                     ValuesSource.Bytes.class; // defaulting to bytes
 
             ValuesSourceConfig<?> config = new ValuesSourceConfig(valueSourceType);
+            config.defaultValues(defaultValues);
             ValueFormatter valueFormatter = null;
             ValueParser valueParser = null;
             if (valueType != null) {
@@ -275,6 +300,9 @@ public class TermsParser implements Aggregator.Parser {
         config.script(searchScript);
 
         config.fieldContext(new FieldContext(field, indexFieldData));
+
+        config.trackDocs(tracDocs);
+        config.defaultValues(defaultValues);
 
         // We need values to be unique to be able to run terms aggs efficiently
         if (!assumeUnique) {

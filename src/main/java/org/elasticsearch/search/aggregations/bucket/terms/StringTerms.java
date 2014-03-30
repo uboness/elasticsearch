@@ -28,6 +28,7 @@ import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -88,8 +89,8 @@ public class StringTerms extends InternalTerms {
 
     StringTerms() {} // for serialization
 
-    public StringTerms(String name, InternalOrder order, int requiredSize, long minDocCount, Collection<InternalTerms.Bucket> buckets) {
-        super(name, order, requiredSize, minDocCount, buckets);
+    public StringTerms(String name, TrackingInfo info, InternalOrder order, int requiredSize, long minDocCount, Collection<InternalTerms.Bucket> buckets) {
+        super(name, info, order, requiredSize, minDocCount, buckets);
     }
 
     @Override
@@ -98,26 +99,17 @@ public class StringTerms extends InternalTerms {
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.name = in.readString();
-        this.order = InternalOrder.Streams.readOrder(in);
-        this.requiredSize = readSize(in);
-        this.minDocCount = in.readVLong();
+    public Collection<InternalTerms.Bucket> readBucketsFrom(StreamInput in) throws IOException {
         int size = in.readVInt();
         List<InternalTerms.Bucket> buckets = new ArrayList<>(size);
         for (int i = 0; i < size; i++) {
             buckets.add(new Bucket(in.readBytesRef(), in.readVLong(), InternalAggregations.readAggregations(in)));
         }
-        this.buckets = buckets;
-        this.bucketMap = null;
+        return buckets;
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
-        InternalOrder.Streams.writeOrder(order, out);
-        writeSize(requiredSize, out);
-        out.writeVLong(minDocCount);
+    public void writeBucketsTo(StreamOutput out, Collection<InternalTerms.Bucket> buckets) throws IOException {
         out.writeVInt(buckets.size());
         for (InternalTerms.Bucket bucket : buckets) {
             out.writeBytesRef(((Bucket) bucket).termBytes);
@@ -127,8 +119,7 @@ public class StringTerms extends InternalTerms {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startArray(CommonFields.BUCKETS);
         for (InternalTerms.Bucket bucket : buckets) {
             builder.startObject();
@@ -138,8 +129,6 @@ public class StringTerms extends InternalTerms {
             builder.endObject();
         }
         builder.endArray();
-        builder.endObject();
-        return builder;
     }
 
 }

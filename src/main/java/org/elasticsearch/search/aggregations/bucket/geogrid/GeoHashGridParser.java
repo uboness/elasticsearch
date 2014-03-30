@@ -29,6 +29,7 @@ import org.elasticsearch.search.aggregations.AggregatorFactory;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.NonCollectingAggregator;
 import org.elasticsearch.search.aggregations.bucket.BucketUtils;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.support.*;
 import org.elasticsearch.search.internal.SearchContext;
 
@@ -130,7 +131,7 @@ public class GeoHashGridParser implements Aggregator.Parser {
 
         @Override
         protected Aggregator createUnmapped(AggregationContext aggregationContext, Aggregator parent) {
-            final InternalAggregation aggregation = new InternalGeoHashGrid(name, requiredSize, Collections.<InternalGeoHashGrid.Bucket>emptyList());
+            final InternalAggregation aggregation = new InternalGeoHashGrid(name, TrackingInfo.EMPTY, requiredSize, Collections.<InternalGeoHashGrid.Bucket>emptyList());
             return new NonCollectingAggregator(name, aggregationContext, parent) {
                 public InternalAggregation buildEmptyAggregation() {
                     return aggregation;

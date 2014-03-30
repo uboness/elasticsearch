@@ -29,6 +29,8 @@ import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
+import org.elasticsearch.search.aggregations.bucket.InternalMultiBucketsAggregation;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatterStreams;
 
@@ -38,7 +40,7 @@ import java.util.*;
 /**
  *
  */
-public class InternalRange<B extends InternalRange.Bucket> extends InternalAggregation implements Range {
+public class InternalRange<B extends InternalRange.Bucket> extends InternalMultiBucketsAggregation implements Range {
 
     static final Factory FACTORY = new Factory();
 
@@ -163,8 +165,8 @@ public class InternalRange<B extends InternalRange.Bucket> extends InternalAggre
             return TYPE.name();
         }
 
-        public R create(String name, List<B> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
-            return (R) new InternalRange<>(name, ranges, formatter, keyed, unmapped);
+        public R create(String name, TrackingInfo info, List<B> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
+            return (R) new InternalRange<>(name, info, ranges, formatter, keyed, unmapped);
         }
 
 
@@ -182,8 +184,8 @@ public class InternalRange<B extends InternalRange.Bucket> extends InternalAggre
 
     public InternalRange() {} // for serialization
 
-    public InternalRange(String name, List<B> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
-        super(name);
+    public InternalRange(String name, TrackingInfo info, List<B> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
+        super(name, info);
         this.ranges = ranges;
         this.formatter = formatter;
         this.keyed = keyed;
@@ -221,12 +223,22 @@ public class InternalRange<B extends InternalRange.Bucket> extends InternalAggre
             }
             return reduced;
         }
+
+        InternalRange reduced = (InternalRange) aggregations.get(0);
+
         List<List<Bucket>> rangesList = null;
         for (InternalAggregation aggregation : aggregations) {
             InternalRange<Bucket> ranges = (InternalRange) aggregation;
             if (ranges.unmapped) {
                 continue;
             }
+
+            if (reduced.info == null) {
+                reduced.info = ranges.info;
+            } else {
+                reduced.info.add(ranges.info);
+            }
+
             if (rangesList == null) {
                 rangesList = new ArrayList<>(ranges.ranges.size());
                 for (Bucket bucket : ranges.ranges) {
@@ -247,7 +259,6 @@ public class InternalRange<B extends InternalRange.Bucket> extends InternalAggre
             return aggregations.get(0);
         }
 
-        InternalRange reduced = (InternalRange) aggregations.get(0);
         int i = 0;
         for (List<Bucket> sameRangeList : rangesList) {
             reduced.ranges.set(i++, (sameRangeList.get(0)).reduce(sameRangeList, reduceContext.bigArrays()));
@@ -260,8 +271,7 @@ public class InternalRange<B extends InternalRange.Bucket> extends InternalAggre
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        name = in.readString();
+    public void internalReadFrom(StreamInput in) throws IOException {
         formatter = ValueFormatterStreams.readOptional(in);
         keyed = in.readBoolean();
         int size = in.readVInt();
@@ -275,8 +285,7 @@ public class InternalRange<B extends InternalRange.Bucket> extends InternalAggre
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
+    public void internalWriteTo(StreamOutput out) throws IOException {
         ValueFormatterStreams.writeOptional(formatter, out);
         out.writeBoolean(keyed);
         out.writeVInt(ranges.size());
@@ -290,8 +299,7 @@ public class InternalRange<B extends InternalRange.Bucket> extends InternalAggre
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         if (keyed) {
             builder.startObject(CommonFields.BUCKETS);
         } else {
@@ -305,7 +313,6 @@ public class InternalRange<B extends InternalRange.Bucket> extends InternalAggre
         } else {
             builder.endArray();
         }
-        return builder.endObject();
     }
 
 }

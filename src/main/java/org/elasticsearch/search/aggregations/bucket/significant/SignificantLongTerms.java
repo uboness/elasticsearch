@@ -25,6 +25,7 @@ import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatterStreams;
 
@@ -88,10 +89,10 @@ public class SignificantLongTerms extends InternalSignificantTerms {
 
     SignificantLongTerms() {} // for serialization
 
-    public SignificantLongTerms(long subsetSize, long supersetSize, String name, ValueFormatter valueFormatter,
+    public SignificantLongTerms(String name, TrackingInfo info, long subsetSize, long supersetSize, ValueFormatter valueFormatter,
             int requiredSize, long minDocCount, Collection<InternalSignificantTerms.Bucket> buckets) {
 
-        super(subsetSize, supersetSize, name, requiredSize, minDocCount, buckets);
+        super(name, info, subsetSize, supersetSize, requiredSize, minDocCount, buckets);
         this.valueFormatter = valueFormatter;
     }
 
@@ -101,8 +102,7 @@ public class SignificantLongTerms extends InternalSignificantTerms {
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.name = in.readString();
+    public void internalReadFrom(StreamInput in) throws IOException {
         this.valueFormatter = ValueFormatterStreams.readOptional(in);
         this.requiredSize = readSize(in);
         this.minDocCount = in.readVLong();
@@ -122,7 +122,7 @@ public class SignificantLongTerms extends InternalSignificantTerms {
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
+    public void internalWriteTo(StreamOutput out) throws IOException {
         out.writeString(name);
         ValueFormatterStreams.writeOptional(valueFormatter, out);
         writeSize(requiredSize, out);
@@ -139,8 +139,7 @@ public class SignificantLongTerms extends InternalSignificantTerms {
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         builder.field("doc_count", subsetSize);
         builder.startArray(CommonFields.BUCKETS);
         for (InternalSignificantTerms.Bucket bucket : buckets) {
@@ -156,8 +155,6 @@ public class SignificantLongTerms extends InternalSignificantTerms {
             builder.endObject();
         }
         builder.endArray();
-        builder.endObject();
-        return builder;
     }
 
 }

@@ -22,6 +22,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.search.aggregations.AggregationStreams;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -56,7 +57,7 @@ public class UnmappedSignificantTerms extends InternalSignificantTerms {
     public UnmappedSignificantTerms(String name, int requiredSize, long minDocCount) {
         //We pass zero for index/subset sizes because for the purpose of significant term analysis 
         // we assume an unmapped index's size is irrelevant to the proceedings. 
-        super(0, 0, name, requiredSize, minDocCount, BUCKETS);
+        super(name, TrackingInfo.EMPTY, 0, 0, requiredSize, minDocCount, BUCKETS);
     }
 
     @Override
@@ -65,8 +66,7 @@ public class UnmappedSignificantTerms extends InternalSignificantTerms {
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        this.name = in.readString();
+    public void internalReadFrom(StreamInput in) throws IOException {
         this.requiredSize = readSize(in);
         this.minDocCount = in.readVLong();
         this.buckets = BUCKETS;
@@ -74,18 +74,14 @@ public class UnmappedSignificantTerms extends InternalSignificantTerms {
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
+    public void internalWriteTo(StreamOutput out) throws IOException {
         writeSize(requiredSize, out);
         out.writeVLong(minDocCount);
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startArray(CommonFields.BUCKETS).endArray();
-        builder.endObject();
-        return builder;
     }
 
 }

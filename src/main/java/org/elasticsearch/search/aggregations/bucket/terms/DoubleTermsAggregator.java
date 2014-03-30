@@ -25,6 +25,7 @@ import org.elasticsearch.index.fielddata.DoubleValues;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.bucket.BucketsAggregator;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.terms.support.BucketPriorityQueue;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
@@ -130,12 +131,15 @@ public class DoubleTermsAggregator extends BucketsAggregator {
             bucket.aggregations = bucketAggregations(bucket.bucketOrd);
             list[i] = bucket;
         }
-        return new DoubleTerms(name, order, formatter, requiredSize, minDocCount, Arrays.asList(list));
+
+        TrackingInfo info = TrackingInfo.resolve(valuesSource);
+
+        return new DoubleTerms(name, info, order, formatter, requiredSize, minDocCount, Arrays.asList(list));
     }
 
     @Override
     public DoubleTerms buildEmptyAggregation() {
-        return new DoubleTerms(name, order, formatter, requiredSize, minDocCount, Collections.<InternalTerms.Bucket>emptyList());
+        return new DoubleTerms(name, TrackingInfo.EMPTY, order, formatter, requiredSize, minDocCount, Collections.<InternalTerms.Bucket>emptyList());
     }
 
     @Override

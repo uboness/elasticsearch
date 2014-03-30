@@ -20,6 +20,8 @@ package org.elasticsearch.search.aggregations.bucket.terms;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import org.elasticsearch.common.io.stream.StreamInput;
+import org.elasticsearch.common.io.stream.StreamOutput;
 import org.elasticsearch.common.io.stream.Streamable;
 import org.elasticsearch.common.text.Text;
 import org.elasticsearch.common.util.BigArrays;
@@ -27,14 +29,17 @@ import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
+import org.elasticsearch.search.aggregations.bucket.InternalMultiBucketsAggregation;
 import org.elasticsearch.search.aggregations.bucket.terms.support.BucketPriorityQueue;
 
+import java.io.IOException;
 import java.util.*;
 
 /**
  *
  */
-public abstract class InternalTerms extends InternalAggregation implements Terms, ToXContent, Streamable {
+public abstract class InternalTerms extends InternalMultiBucketsAggregation implements Terms, ToXContent, Streamable {
 
     public static abstract class Bucket extends Terms.Bucket {
 
@@ -87,12 +92,17 @@ public abstract class InternalTerms extends InternalAggregation implements Terms
 
     protected InternalTerms() {} // for serialization
 
-    protected InternalTerms(String name, InternalOrder order, int requiredSize, long minDocCount, Collection<Bucket> buckets) {
-        super(name);
+    protected InternalTerms(String name, TrackingInfo info, InternalOrder order, int requiredSize, long minDocCount, Collection<Bucket> buckets) {
+        super(name, info);
         this.order = order;
         this.requiredSize = requiredSize;
         this.minDocCount = minDocCount;
         this.buckets = buckets;
+    }
+
+    @Override
+    public TrackingInfo getBucketsInfo() {
+        return info;
     }
 
     @Override
@@ -131,6 +141,14 @@ public abstract class InternalTerms extends InternalAggregation implements Terms
             }
             if (reduced == null) {
                 reduced = terms;
+            } else {
+                // just for safety and "correctness", in practice, it will never happen that some
+                // aggs have info while others don't
+                if (reduced.info == null) {
+                    reduced.info = terms.info;
+                } else {
+                    reduced.info.add(terms.info);
+                }
             }
             if (buckets == null) {
                 buckets = new HashMap<>(terms.buckets.size());
@@ -180,5 +198,27 @@ public abstract class InternalTerms extends InternalAggregation implements Terms
         }
         buckets = newBuckets;
     }
+
+    @Override
+    public final void internalReadFrom(StreamInput in) throws IOException {
+        this.order = InternalOrder.Streams.readOrder(in);
+        this.requiredSize = readSize(in);
+        this.minDocCount = in.readVLong();
+        this.buckets = readBucketsFrom(in);
+        this.bucketMap = null;
+    }
+
+    protected abstract Collection<Bucket> readBucketsFrom(StreamInput in) throws IOException;
+
+    @Override
+    public final void internalWriteTo(StreamOutput out) throws IOException {
+        InternalOrder.Streams.writeOrder(order, out);
+        writeSize(requiredSize, out);
+        out.writeVLong(minDocCount);
+        writeBucketsTo(out, buckets);
+    }
+
+    protected abstract void writeBucketsTo(StreamOutput out, Collection<Bucket> buckets) throws IOException;
+
 
 }

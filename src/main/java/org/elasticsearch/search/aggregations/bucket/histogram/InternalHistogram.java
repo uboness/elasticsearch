@@ -34,6 +34,8 @@ import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
+import org.elasticsearch.search.aggregations.bucket.InternalMultiBucketsAggregation;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatterStreams;
 
@@ -46,7 +48,7 @@ import java.util.ListIterator;
 /**
  * TODO should be renamed to InternalNumericHistogram (see comment on {@link Histogram})?
  */
-public class InternalHistogram<B extends InternalHistogram.Bucket> extends InternalAggregation implements Histogram {
+public class InternalHistogram<B extends InternalHistogram.Bucket> extends InternalMultiBucketsAggregation implements Histogram {
 
     final static Type TYPE = new Type("histogram", "histo");
     final static Factory FACTORY = new Factory();
@@ -172,9 +174,9 @@ public class InternalHistogram<B extends InternalHistogram.Bucket> extends Inter
             return TYPE.name();
         }
 
-        public InternalHistogram<B> create(String name, List<B> buckets, InternalOrder order, long minDocCount,
+        public InternalHistogram<B> create(String name, TrackingInfo info, List<B> buckets, InternalOrder order, long minDocCount,
                                            EmptyBucketInfo emptyBucketInfo, ValueFormatter formatter, boolean keyed) {
-            return new InternalHistogram<>(name, buckets, order, minDocCount, emptyBucketInfo, formatter, keyed);
+            return new InternalHistogram<>(name, info, buckets, order, minDocCount, emptyBucketInfo, formatter, keyed);
         }
 
         public B createBucket(long key, long docCount, InternalAggregations aggregations, ValueFormatter formatter) {
@@ -193,8 +195,8 @@ public class InternalHistogram<B extends InternalHistogram.Bucket> extends Inter
 
     InternalHistogram() {} // for serialization
 
-    InternalHistogram(String name, List<B> buckets, InternalOrder order, long minDocCount, EmptyBucketInfo emptyBucketInfo, ValueFormatter formatter, boolean keyed) {
-        super(name);
+    InternalHistogram(String name, TrackingInfo info, List<B> buckets, InternalOrder order, long minDocCount, EmptyBucketInfo emptyBucketInfo, ValueFormatter formatter, boolean keyed) {
+        super(name, info);
         this.buckets = buckets;
         this.order = order;
         assert (minDocCount == 0) == (emptyBucketInfo != null);
@@ -326,6 +328,13 @@ public class InternalHistogram<B extends InternalHistogram.Bucket> extends Inter
         LongObjectPagedHashMap<List<B>> bucketsByKey = new LongObjectPagedHashMap<>(reduceContext.bigArrays());
         for (InternalAggregation aggregation : aggregations) {
             InternalHistogram<B> histogram = (InternalHistogram) aggregation;
+
+            if (reduced.info == null) {
+                reduced.info = histogram.info;
+            } else {
+                reduced.info.add(histogram.info);
+            }
+
             for (B bucket : histogram.buckets) {
                 List<B> bucketList = bucketsByKey.get(bucket.key);
                 if (bucketList == null) {
@@ -411,7 +420,6 @@ public class InternalHistogram<B extends InternalHistogram.Bucket> extends Inter
             CollectionUtil.introSort(reducedBuckets, order.comparator());
         }
 
-
         reduced.buckets = reducedBuckets;
         return reduced;
     }
@@ -421,8 +429,7 @@ public class InternalHistogram<B extends InternalHistogram.Bucket> extends Inter
     }
 
     @Override
-    public void readFrom(StreamInput in) throws IOException {
-        name = in.readString();
+    public void internalReadFrom(StreamInput in) throws IOException {
         order = InternalOrder.Streams.readOrder(in);
         minDocCount = in.readVLong();
         if (minDocCount == 0) {
@@ -440,8 +447,7 @@ public class InternalHistogram<B extends InternalHistogram.Bucket> extends Inter
     }
 
     @Override
-    public void writeTo(StreamOutput out) throws IOException {
-        out.writeString(name);
+    public void internalWriteTo(StreamOutput out) throws IOException {
         InternalOrder.Streams.writeOrder(order, out);
         out.writeVLong(minDocCount);
         if (minDocCount == 0) {
@@ -458,8 +464,7 @@ public class InternalHistogram<B extends InternalHistogram.Bucket> extends Inter
     }
 
     @Override
-    public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
-        builder.startObject(name);
+    public void bucketsToXContent(XContentBuilder builder, Params params) throws IOException {
         if (keyed) {
             builder.startObject(CommonFields.BUCKETS);
         } else {
@@ -493,7 +498,6 @@ public class InternalHistogram<B extends InternalHistogram.Bucket> extends Inter
         } else {
             builder.endArray();
         }
-        return builder.endObject();
     }
 
 }

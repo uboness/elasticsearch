@@ -25,6 +25,7 @@ import org.elasticsearch.index.fielddata.LongValues;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.InternalAggregation;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.BucketsAggregator;
 import org.elasticsearch.search.aggregations.bucket.terms.support.BucketPriorityQueue;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
@@ -130,12 +131,15 @@ public class LongTermsAggregator extends BucketsAggregator {
             bucket.aggregations = bucketAggregations(bucket.bucketOrd);
             list[i] = bucket;
         }
-        return new LongTerms(name, order, formatter, requiredSize, minDocCount, Arrays.asList(list));
+
+        TrackingInfo info = TrackingInfo.resolve(valuesSource);
+
+        return new LongTerms(name, info, order, formatter, requiredSize, minDocCount, Arrays.asList(list));
     }
 
     @Override
     public InternalAggregation buildEmptyAggregation() {
-        return new LongTerms(name, order, formatter, requiredSize, minDocCount, Collections.<InternalTerms.Bucket>emptyList());
+        return new LongTerms(name, TrackingInfo.EMPTY, order, formatter, requiredSize, minDocCount, Collections.<InternalTerms.Bucket>emptyList());
     }
 
     @Override

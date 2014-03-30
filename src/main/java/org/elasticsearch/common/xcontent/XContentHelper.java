@@ -31,7 +31,9 @@ import org.elasticsearch.common.compress.CompressorFactory;
 import org.elasticsearch.common.io.Streams;
 import org.elasticsearch.common.io.stream.BytesStreamInput;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -179,6 +181,18 @@ public class XContentHelper {
                 parser.close();
             }
         }
+    }
+
+    public static String convertToJson(ToXContent object) throws IOException {
+        return convertToJson(object, ToXContent.EMPTY_PARAMS);
+    }
+
+    public static String convertToJson(ToXContent object, ToXContent.Params params) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(2048);
+        XContentBuilder builder = XContentFactory.jsonBuilder(out);
+        object.toXContent(builder, params);
+        builder.flush();
+        return new String(out.toByteArray(), "UTF8");
     }
 
     /**

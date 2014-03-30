@@ -26,13 +26,15 @@ import org.elasticsearch.common.xcontent.ToXContent;
 import org.elasticsearch.search.aggregations.Aggregations;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
+import org.elasticsearch.search.aggregations.bucket.InternalMultiBucketsAggregation;
 
 import java.util.*;
 
 /**
  *
  */
-public abstract class InternalSignificantTerms extends InternalAggregation implements SignificantTerms, ToXContent, Streamable {
+public abstract class InternalSignificantTerms extends InternalMultiBucketsAggregation implements SignificantTerms, ToXContent, Streamable {
 
     protected int requiredSize;
     protected long minDocCount;
@@ -165,8 +167,8 @@ public abstract class InternalSignificantTerms extends InternalAggregation imple
         }
     }
 
-    protected InternalSignificantTerms(long subsetSize, long supersetSize, String name, int requiredSize, long minDocCount, Collection<Bucket> buckets) {
-        super(name);
+    protected InternalSignificantTerms(String name, TrackingInfo info, long subsetSize, long supersetSize, int requiredSize, long minDocCount, Collection<Bucket> buckets) {
+        super(name, info);
         this.requiredSize = requiredSize;
         this.minDocCount = minDocCount;
         this.buckets = buckets;
@@ -205,7 +207,9 @@ public abstract class InternalSignificantTerms extends InternalAggregation imple
             terms.trimExcessEntries();
             return terms;
         }
+
         InternalSignificantTerms reduced = null;
+        TrackingInfo info = null;
 
         long globalSubsetSize = 0;
         long globalSupersetSize = 0;
@@ -224,6 +228,11 @@ public abstract class InternalSignificantTerms extends InternalAggregation imple
             }
             if (reduced == null) {
                 reduced = terms;
+            }
+            if (reduced.info == null) {
+                reduced.info = terms.info;
+            } else {
+                reduced.info.add(terms.info);
             }
             if (buckets == null) {
                 buckets = new HashMap<>(terms.buckets.size());

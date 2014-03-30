@@ -25,6 +25,7 @@ import org.elasticsearch.index.fielddata.LongValues;
 import org.elasticsearch.search.aggregations.Aggregator;
 import org.elasticsearch.search.aggregations.AggregatorFactories;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.BucketsAggregator;
 import org.elasticsearch.search.aggregations.support.AggregationContext;
 import org.elasticsearch.search.aggregations.support.ValuesSource;
@@ -122,12 +123,15 @@ public class GeoHashGridAggregator extends BucketsAggregator {
             bucket.aggregations = bucketAggregations(bucket.bucketOrd);
             list[i] = bucket;
         }
-        return new InternalGeoHashGrid(name, requiredSize, Arrays.asList(list));
+
+        TrackingInfo info = TrackingInfo.resolve(valuesSource);
+
+        return new InternalGeoHashGrid(name, info, requiredSize, Arrays.asList(list));
     }
 
     @Override
     public InternalGeoHashGrid buildEmptyAggregation() {
-        return new InternalGeoHashGrid(name, requiredSize, Collections.<InternalGeoHashGrid.Bucket>emptyList());
+        return new InternalGeoHashGrid(name, TrackingInfo.EMPTY, requiredSize, Collections.<InternalGeoHashGrid.Bucket>emptyList());
     }
     
     

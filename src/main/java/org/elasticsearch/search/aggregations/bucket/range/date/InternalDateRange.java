@@ -22,6 +22,7 @@ import org.elasticsearch.common.io.stream.StreamInput;
 import org.elasticsearch.search.aggregations.AggregationStreams;
 import org.elasticsearch.search.aggregations.InternalAggregation;
 import org.elasticsearch.search.aggregations.InternalAggregations;
+import org.elasticsearch.search.aggregations.bucket.TrackingInfo;
 import org.elasticsearch.search.aggregations.bucket.range.InternalRange;
 import org.elasticsearch.search.aggregations.support.format.ValueFormatter;
 import org.joda.time.DateTime;
@@ -81,8 +82,8 @@ public class InternalDateRange extends InternalRange<InternalDateRange.Bucket> i
         }
 
         @Override
-        public InternalDateRange create(String name, List<InternalDateRange.Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
-            return new InternalDateRange(name, ranges, formatter, keyed, unmapped);
+        public InternalDateRange create(String name, TrackingInfo info, List<Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
+            return new InternalDateRange(name, info, ranges, formatter, keyed, unmapped);
         }
 
         @Override
@@ -93,8 +94,8 @@ public class InternalDateRange extends InternalRange<InternalDateRange.Bucket> i
 
     InternalDateRange() {} // for serialization
 
-    InternalDateRange(String name, List<InternalDateRange.Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
-        super(name, ranges, formatter, keyed, unmapped);
+    InternalDateRange(String name, TrackingInfo info, List<Bucket> ranges, ValueFormatter formatter, boolean keyed, boolean unmapped) {
+        super(name, info, ranges, formatter, keyed, unmapped);
     }
 
     @Override
